@@ -5,11 +5,12 @@ const execFileAsync = promisify(execFile);
 
 export default {
   name: 'trivy',
-  extensions: ['.py', '.js', '.ts', '.go', '.java', '.rb', '.php', '.tf', '.yaml', '.yml'],
+  extensions: ['.py', '.js', '.ts', '.go', '.java', '.rb', '.php', '.tf', '.yaml', '.yml', '.rs', '.kt', '.kts', '.cs', '.c', '.cpp', '.swift', '.sql'],
   installHint: 'curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ~/.local/bin',
 
-  buildCommand(targetDir, configPath) {
-    const args = ['fs', '--scanners', 'vuln,misconfig,secret', '--format', 'json', '--quiet'];
+  buildCommand(targetDir, configPath, { files = [], fix = false, licenses = false } = {}) {
+    const scanners = licenses ? 'vuln,misconfig,secret,license' : 'vuln,misconfig,secret';
+    const args = ['fs', '--scanners', scanners, '--format', 'json', '--quiet'];
     if (configPath) args.push('--config', configPath);
     // trivy scans the full directory (ignores files arg — same pattern as jscpd)
     args.push(targetDir);
@@ -73,6 +74,20 @@ export default {
           rule: secret.RuleID || 'secret',
           severity: 'error',
           message: `${secret.Category}: ${secret.Title} (match: ${secret.Match?.slice(0, 30)}...)`,
+        });
+      }
+
+      // Licenses → LICENSE
+      for (const lic of entry.Licenses || []) {
+        if (!['CRITICAL', 'HIGH'].includes(lic.Severity)) continue;
+        findings.push({
+          file: target,
+          line: 0,
+          col: undefined,
+          tag: 'LICENSE',
+          rule: lic.Name || 'unknown-license',
+          severity: 'error',
+          message: `Restrictive license: ${lic.PkgName} uses ${lic.Name} (${lic.Severity}). Consider replacing with an MIT/Apache-2.0 alternative`,
         });
       }
     }

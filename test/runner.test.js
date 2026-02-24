@@ -162,6 +162,26 @@ describe('runTools', () => {
     assert.equal(receivedOpts.fix, true);
   });
 
+  it('passes licenses option to buildCommand', async () => {
+    let receivedOpts = {};
+    const mockTool = {
+      name: 'lic-tool',
+      buildCommand(targetDir, configPath, opts) {
+        receivedOpts = opts;
+        return { bin: 'echo', args: ['ok'] };
+      },
+      parseOutput() { return []; },
+    };
+
+    await runTools(
+      [{ tool: mockTool, config: { path: null, source: 'none' } }],
+      '/tmp',
+      { timeout: 5000, licenses: true }
+    );
+
+    assert.equal(receivedOpts.licenses, true);
+  });
+
   it('runs preFixCommands before main command in fix mode', async () => {
     const callOrder = [];
     const mockTool = {

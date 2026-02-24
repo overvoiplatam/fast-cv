@@ -5,7 +5,8 @@ const execFileAsync = promisify(execFile);
 
 export default {
   name: 'typos',
-  extensions: ['.py', '.pyi', '.js', '.jsx', '.ts', '.tsx', '.go', '.java', '.rb', '.php', '.rs', '.c', '.cpp', '.h', '.cs', '.swift'],
+  extensions: ['.py', '.pyi', '.js', '.jsx', '.ts', '.tsx', '.go', '.java', '.rb', '.php', '.rs', '.c', '.cpp', '.h', '.cs', '.swift', '.kt', '.kts', '.sql', '.mts', '.cts', '.scala', '.sh', '.bash'],
+  optIn: true,  // noisy — only runs when explicitly requested via --tools=typos
   installHint: 'cargo install typos-cli  (or: brew install typos-cli)',
 
   buildCommand(targetDir, configPath, { files = [] } = {}) {

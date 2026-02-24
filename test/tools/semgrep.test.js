@@ -8,6 +8,15 @@ describe('semgrep adapter', () => {
     assert.ok(semgrep.extensions.includes('.py'));
     assert.ok(semgrep.extensions.includes('.js'));
     assert.ok(semgrep.extensions.includes('.go'));
+    // expanded language support
+    assert.ok(semgrep.extensions.includes('.php'));
+    assert.ok(semgrep.extensions.includes('.rs'));
+    assert.ok(semgrep.extensions.includes('.c'));
+    assert.ok(semgrep.extensions.includes('.cpp'));
+    assert.ok(semgrep.extensions.includes('.cs'));
+    assert.ok(semgrep.extensions.includes('.kt'));
+    assert.ok(semgrep.extensions.includes('.swift'));
+    assert.ok(semgrep.extensions.includes('.scala'));
   });
 
   it('builds command with auto config when no config provided', () => {

@@ -8,5 +8,7 @@ import jscpd from './jscpd.js';
 import trivy from './trivy.js';
 import mypy from './mypy.js';
 import typos from './typos.js';
+import vulture from './vulture.js';
+import knip from './knip.js';
 
-export const tools = [ruff, eslint, semgrep, bearer, golangciLint, jscpd, trivy, mypy, typos];
+export const tools = [ruff, eslint, semgrep, bearer, golangciLint, jscpd, trivy, mypy, typos, vulture, knip];

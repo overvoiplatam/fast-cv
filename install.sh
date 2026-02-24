@@ -279,6 +279,13 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
     install_python_tool mypy && ok "mypy installed" || warn "Failed to install mypy"
   fi
 
+  # vulture (Python dead code detector)
+  if command -v vulture &>/dev/null; then
+    ok "vulture already installed: $(vulture --version 2>/dev/null || echo 'version unknown')"
+  else
+    install_python_tool vulture && ok "vulture installed" || warn "Failed to install vulture"
+  fi
+
   # typos (Rust binary — try cargo, then pre-built binary)
   if command -v typos &>/dev/null; then
     ok "typos already installed: $(typos --version 2>/dev/null)"

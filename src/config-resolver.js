@@ -21,6 +21,8 @@ const TOOL_CONFIG_FILES = {
   trivy: ['trivy.yaml', '.trivy.yaml'],
   mypy: ['mypy.ini', '.mypy.ini', 'setup.cfg', 'pyproject.toml'],
   typos: ['typos.toml', '.typos.toml', '_typos.toml'],
+  vulture: [],  // reads pyproject.toml [tool.vulture] natively
+  knip: ['knip.json', 'knip.jsonc', '.knip.json'],
 };
 
 // Map of tool name → default config filename shipped with fast-cv

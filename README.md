@@ -6,21 +6,25 @@ A local, offline CLI tool that orchestrates multiple linters and security scanne
 
 | Tool | Languages | Tags |
 |------|-----------|------|
+| Tool | Languages | Tags |
+|------|-----------|------|
 | [ruff](https://github.com/astral-sh/ruff) | Python | `[LINTER]` `[FORMAT]` `[SECURITY]` `[REFACTOR]` `[BUG]` `[DOCS]` |
 | [eslint](https://eslint.org) + [sonarjs](https://github.com/SonarSource/eslint-plugin-sonarjs) | JS, TS, JSX, TSX | `[LINTER]` `[SECURITY]` `[REFACTOR]` `[BUG]` |
-| [semgrep](https://semgrep.dev) | Python, JS, TS, Go, Java, Ruby | `[SECURITY]` `[BUG]` |
+| [semgrep](https://semgrep.dev) | Python, JS, TS, Go, Java, Ruby, PHP, Rust, C/C++, C#, Kotlin, Swift, Scala | `[SECURITY]` `[BUG]` (OWASP Top 10 + custom taint rules) |
 | [bearer](https://github.com/Bearer/bearer) | Python, JS, TS, Go, Java, Ruby, PHP | `[PRIVACY]` |
 | [golangci-lint](https://golangci-lint.run) | Go | `[LINTER]` `[REFACTOR]` `[BUG]` `[SECURITY]` |
 | [jscpd](https://github.com/kucherenko/jscpd) | All supported languages | `[DUPLICATION]` |
-| [trivy](https://github.com/aquasecurity/trivy) | Python, JS, Go, Java, Ruby, PHP, Terraform | `[DEPENDENCY]` `[INFRA]` `[SECRET]` |
+| [trivy](https://github.com/aquasecurity/trivy) | Python, JS, Go, Java, Ruby, PHP, Terraform, Rust, Kotlin, C#, C/C++, Swift, SQL | `[DEPENDENCY]` `[INFRA]` `[SECRET]` `[LICENSE]` |
 | [mypy](https://mypy-lang.org) | Python | `[TYPE_ERROR]` |
-| [typos](https://github.com/crate-ci/typos) | All supported languages | `[TYPO]` |
+| [vulture](https://github.com/jendrikseipp/vulture) | Python | `[DEAD_CODE]` |
+| [typos](https://github.com/crate-ci/typos) | All supported languages | `[TYPO]` (opt-in) |
+| [knip](https://knip.dev) | JS, TS | `[DEAD_CODE]` (opt-in) |
 
-Tools are automatically selected based on detected file types. Missing tools are skipped gracefully.
+Tools are automatically selected based on detected file types. Missing tools are skipped gracefully. Tools marked **(opt-in)** only run when explicitly requested via `--tools`.
 
 ## Security Architecture
 
-fast-cv implements a four-pillar security model that provides bank-grade coverage across different vulnerability classes:
+fast-cv implements a five-pillar security model that provides bank-grade coverage across different vulnerability classes:
 
 | Pillar | Tool | What it catches | Tag |
 |--------|------|----------------|-----|
@@ -28,6 +32,7 @@ fast-cv implements a four-pillar security model that provides bank-grade coverag
 | **SCA** (Software Composition) | Trivy | CVEs in dependencies (requirements.txt, package-lock.json, go.sum) | `[DEPENDENCY]` |
 | **IaC** (Infrastructure as Code) | Trivy | Dockerfile misconfigs, privileged containers, Terraform issues | `[INFRA]` |
 | **Secrets/PII** | Trivy + Bearer | Hardcoded API keys, AWS tokens, passwords + PII data flows | `[SECRET]` `[PRIVACY]` |
+| **License Compliance** | Trivy (`--licenses`) | Restrictive licenses (AGPL, GPL) in dependencies | `[LICENSE]` |
 
 ### Offline-first design
 
@@ -43,7 +48,7 @@ cd fast-cv
 ./install.sh
 ```
 
-The installer handles everything: Node.js dependencies, linter binaries, default configs, and global `fast-cv` command.
+The installer handles everything: Node.js dependencies, linter binaries, default configs, OWASP semgrep rules download, and global `fast-cv` command.
 
 ### Reinstalling
 
@@ -61,9 +66,10 @@ When a previous installation is detected, the installer prompts you to choose:
 - Node.js >= 20
 - npm
 - git
-- python3 + pip3 (for ruff, semgrep, mypy)
-- curl (for bearer, golangci-lint, trivy installers)
+- python3 + pip3 (for ruff, semgrep, mypy, vulture)
+- curl (for bearer, golangci-lint, trivy installers + OWASP rules download)
 - cargo (optional, for typos-cli)
+- npx (for knip, included with Node.js)
 
 ## Usage
 
@@ -81,6 +87,8 @@ fast-cv [directory] [options]
 | `-x, --exclude <patterns>` | Comma-separated ignore patterns (gitignore syntax) | none |
 | `--only <patterns>` | Comma-separated file paths or glob patterns to scan exclusively | none |
 | `--fix` | Auto-fix formatting/style issues where supported | `false` |
+| `--licenses` | Include open-source license compliance scanning (trivy) | `false` |
+| `--sbom` | Generate CycloneDX SBOM inventory to stdout (requires trivy) | `false` |
 | `-v, --verbose` | Show detailed output on stderr | `false` |
 | `--auto-install` | Auto-install missing tools | `false` |
 
@@ -122,7 +130,16 @@ fast-cv . -x "storybook-static/,*.config.js"
 fast-cv --tools=jscpd .
 fast-cv --tools=trivy .
 fast-cv --tools=mypy .
-fast-cv --tools=typos .
+fast-cv --tools=typos .         # opt-in tool: only runs when explicitly requested
+fast-cv --tools=knip .          # opt-in tool: dead code detection for JS/TS
+fast-cv --tools=vulture .       # dead code detection for Python
+
+# License compliance scanning
+fast-cv --licenses .
+fast-cv --licenses --tools=trivy .
+
+# Generate CycloneDX SBOM
+fast-cv --sbom . > sbom.json
 ```
 
 ## `--only` Flag
@@ -164,6 +181,8 @@ Fix support varies by tool:
 | **trivy** | No fix capability. Scans for vulnerabilities, misconfigs, and secrets. |
 | **mypy** | No fix capability. Reports type errors only. |
 | **typos** | No fix capability. Reports spelling mistakes. |
+| **vulture** | No fix capability. Reports dead code in Python. |
+| **knip** | No fix capability. Reports unused files, exports, and dependencies in JS/TS. |
 
 When `--fix` is active, the report header shows `**Mode**: fix`.
 
@@ -230,7 +249,7 @@ fast-cv produces tagged Markdown grouped by file:
 
 ### `requirements.txt`
 
-- **[DEPENDENCY]** `CVE-2023-1234` Vulnerable dependency: requests@2.28.0 has CVE-2023-1234 (HIGH). Upgrade to 2.31.0. HTTP redirect vulnerability (line 0)
+- **[DEPENDENCY]** `CVE-2023-1234` Vulnerable dependency: requests@2.28.0 has CVE-2023-1234 (HIGH). Upgrade to 2.31.0. HTTP redirect handling vulnerability (line 0)
 
 ### `Dockerfile`
 
@@ -242,9 +261,17 @@ fast-cv produces tagged Markdown grouped by file:
 - **[TYPO]** `typo` "teh" → the (line 42)
 - **[DUPLICATION]** `jscpd/javascript` Duplicated block (20 lines, 100 tokens) — also in src/api/handler.js:45 (line 10)
 
+### `package-lock.json`
+
+- **[LICENSE]** `GPL-3.0` Restrictive license: some-gpl-lib uses GPL-3.0 (HIGH). Consider replacing with an MIT/Apache-2.0 alternative (line 0)
+
+### `src/old_parser.py`
+
+- **[DEAD_CODE]** `vulture/unused` unused function 'parse_legacy_format' (90% confidence) (line 42)
+
 ---
 
-*14 findings from 7 tools in 6.2s*
+*16 findings from 9 tools in 7.4s*
 ```
 
 ### Tags
@@ -264,6 +291,8 @@ fast-cv produces tagged Markdown grouped by file:
 | `[TYPE_ERROR]` | Static type error (incompatible types, missing attributes) |
 | `[DOCS]` | Missing or malformed documentation (docstrings, JSDoc) |
 | `[TYPO]` | Spelling mistake in identifiers or comments |
+| `[LICENSE]` | Restrictive open-source license in dependency |
+| `[DEAD_CODE]` | Unused function, variable, file, export, or dependency |
 
 ### Exit Codes
 
@@ -277,12 +306,14 @@ fast-cv produces tagged Markdown grouped by file:
 
 fast-cv resolves configs with a fallback chain (first match wins):
 
-1. **Local**: Config file in the scanned directory (e.g., `ruff.toml`, `eslint.config.js`, `.jscpd.json`, `trivy.yaml`, `mypy.ini`, `typos.toml`)
-2. **User default**: `~/.config/fast-cv/defaults/<file>`
+1. **Local**: Config file or directory in the scanned directory (e.g., `ruff.toml`, `eslint.config.js`, `.semgrep/`, `trivy.yaml`, `mypy.ini`, `typos.toml`)
+2. **User default**: `~/.config/fast-cv/defaults/<file-or-dir>`
 3. **Package default**: Shipped baseline configs in `defaults/`
 4. **None**: Tool uses its own built-in defaults
 
 ### Default Config Highlights
+
+**semgrep** ships as a config directory (`defaults/semgrep/`) containing custom taint rules (`taint.yaml`) and the OWASP Top 10 ruleset (`owasp-top-ten.yaml`, ~543 rules downloaded during install). Semgrep reads all YAML files in the directory, giving ~549 rules total — fully offline after install.
 
 **ruff** ships with pydocstyle (`D`) rules enabled for docstring validation, with targeted ignores for overly-noisy rules (`D100`, `D104`, `D105`, `D107`). Test files are exempt from `D` rules.
 
@@ -307,6 +338,22 @@ Ignore sources (merged together, first match wins):
 - **`.gitignore`**: Patterns from the target directory's `.gitignore`
 - **`.fcvignore`**: Project-specific overrides (same syntax as `.gitignore`)
 - **`--exclude`**: CLI flag for ad-hoc patterns (e.g., `-x "admin/captive/,*.config.js"`)
+
+## Inline Suppression
+
+When a finding is intentional (e.g. a webhook field name dictated by an external API), suppress it inline:
+
+| Tool | Suppress syntax |
+|------|----------------|
+| **ruff** | `# noqa: E501` (specific rule) or `# noqa` (all rules on line) |
+| **eslint** | `// eslint-disable-next-line no-eval` |
+| **semgrep** | `// nosemgrep: rule-id` or `# nosemgrep` |
+| **mypy** | `# type: ignore[error-code]` |
+| **typos** | `// typos:disable-next-line` or `# typos:disable-next-line` |
+| **golangci-lint** | `//nolint:lintername` |
+| **bearer** | `// bearer:disable rule_id` |
+
+These comments are understood natively by each tool — fast-cv does not strip or process them.
 
 ## Development
 
@@ -337,6 +384,14 @@ node bin/fast-cv.js --tools=jscpd .
 node bin/fast-cv.js --tools=trivy .
 node bin/fast-cv.js --tools=mypy .
 node bin/fast-cv.js --tools=typos .
+node bin/fast-cv.js --tools=vulture .
+node bin/fast-cv.js --tools=knip .
+
+# Test license scanning
+node bin/fast-cv.js --licenses --tools=trivy .
+
+# Generate SBOM
+node bin/fast-cv.js --sbom . | python3 -m json.tool
 ```
 
 ## License

@@ -15,7 +15,7 @@ function classifySemgrepSeverity(metadata) {
 
 export default {
   name: 'semgrep',
-  extensions: ['.py', '.js', '.jsx', '.ts', '.tsx', '.go', '.java', '.rb'],
+  extensions: ['.py', '.js', '.jsx', '.ts', '.tsx', '.go', '.java', '.rb', '.php', '.rs', '.c', '.h', '.cpp', '.hpp', '.cs', '.kt', '.kts', '.swift', '.scala'],
   installHint: 'pipx install semgrep  (or: pip3 install --user semgrep)',
 
   buildCommand(targetDir, configPath, { files = [] } = {}) {

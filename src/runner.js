@@ -36,7 +36,7 @@ function spawnAndCollect(bin, args, opts) {
   });
 }
 
-function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false } = {}) {
+function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false, licenses = false } = {}) {
   return new Promise(async (resolve) => {
     const start = Date.now();
 
@@ -52,7 +52,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
         }
       }
 
-      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files, fix });
+      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files, fix, licenses });
 
       const result = await spawnAndCollect(bin, args, { cwd, timeout });
 
@@ -110,9 +110,10 @@ export async function runTools(toolConfigs, targetDir, options = {}) {
   const timeout = options.timeout || 120000;
   const files = options.files || [];
   const fix = options.fix || false;
+  const licenses = options.licenses || false;
 
   const promises = toolConfigs.map(({ tool, config }) =>
-    runSingleTool(tool, config.path, targetDir, timeout, { files, fix })
+    runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses })
   );
 
   const settled = await Promise.allSettled(promises);

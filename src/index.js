@@ -28,6 +28,8 @@ export async function run(argv) {
     .option('-x, --exclude <patterns>', 'comma-separated ignore patterns (gitignore syntax)', '')
     .option('--only <patterns>', 'comma-separated file paths or glob patterns to scan exclusively', '')
     .option('--fix', 'auto-fix formatting/style issues where supported', false)
+    .option('--licenses', 'include open-source license compliance scanning (trivy)', false)
+    .option('--sbom', 'generate CycloneDX SBOM inventory (requires trivy)', false)
     .addOption(new Option('-f, --format <type>', 'output format').choices(['markdown', 'sarif']).default('markdown'))
     .action(async (directory, options) => {
       const targetDir = resolve(directory);
@@ -39,6 +41,29 @@ export async function run(argv) {
         process.exit(EXIT_PRECHECK_FAILED);
       }
 
+      // SBOM generation — early exit, bypasses normal scan pipeline
+      if (options.sbom) {
+        const trivyTool = allTools.find(t => t.name === 'trivy');
+        const installed = trivyTool && await trivyTool.checkInstalled();
+        if (!installed) {
+          process.stderr.write(`Error: trivy is required for SBOM generation. ${trivyTool?.installHint || ''}\n`);
+          process.exit(EXIT_PRECHECK_FAILED);
+        }
+        const { spawn: spawnProc } = await import('node:child_process');
+        const proc = spawnProc('trivy', ['fs', '--format', 'cyclonedx', '--quiet', targetDir],
+          { stdio: ['ignore', 'pipe', 'pipe'] });
+        let stdout = '', stderr = '';
+        proc.stdout.on('data', c => { stdout += c; });
+        proc.stderr.on('data', c => { stderr += c; });
+        await new Promise(r => proc.on('close', r));
+        if (!stdout.trim()) {
+          process.stderr.write(`trivy SBOM error: ${stderr.slice(0, 500)}\n`);
+          process.exit(EXIT_PRECHECK_FAILED);
+        }
+        process.stdout.write(stdout);
+        process.exit(EXIT_CLEAN);
+      }
+
       const timeout = parseInt(options.timeout, 10) * 1000;
       const verbose = options.verbose;
       const exclude = options.exclude
@@ -48,6 +73,7 @@ export async function run(argv) {
         ? options.only.split(',').map(s => s.trim()).filter(Boolean)
         : [];
       const fix = options.fix;
+      const licenses = options.licenses;
       const fmt = options.format === 'sarif' ? formatSarif : formatReport;
 
       // Step 1: Prune directory
@@ -61,12 +87,19 @@ export async function run(argv) {
       }
 
       // Step 2: Filter tools by detected languages and --tools flag
-      let applicableTools = allTools.filter(tool =>
-        tool.extensions.some(ext => languages.has(ext))
-      );
+      const requested = options.tools
+        ? options.tools.split(',').map(s => s.trim().toLowerCase())
+        : null;
 
-      if (options.tools) {
-        const requested = options.tools.split(',').map(s => s.trim().toLowerCase());
+      let applicableTools = allTools.filter(tool => {
+        const hasExtension = tool.extensions.some(ext => languages.has(ext));
+        if (!hasExtension) return false;
+        // Opt-in tools only run when explicitly requested via --tools
+        if (tool.optIn && (!requested || !requested.includes(tool.name))) return false;
+        return true;
+      });
+
+      if (requested) {
         applicableTools = applicableTools.filter(t => requested.includes(t.name));
       }
 
@@ -94,7 +127,7 @@ export async function run(argv) {
 
       // Step 5: Run tools in parallel
       if (verbose) process.stderr.write(`Running ${readyTools.map(t => t.name).join(', ')}...\n`);
-      const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files: only.length > 0 ? files : [], fix });
+      const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files: only.length > 0 ? files : [], fix, licenses });
 
       // Step 6: Post-filter findings through ignore rules
       const filtered = filterFindings(results, targetDir, ignoreFilter, onlyFilter);

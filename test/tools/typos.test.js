@@ -9,6 +9,15 @@ describe('typos adapter', () => {
     assert.ok(typos.extensions.includes('.js'));
     assert.ok(typos.extensions.includes('.rs'));
     assert.ok(typos.installHint.includes('typos'));
+    // expanded language support
+    assert.ok(typos.extensions.includes('.kt'));
+    assert.ok(typos.extensions.includes('.sql'));
+    assert.ok(typos.extensions.includes('.scala'));
+    assert.ok(typos.extensions.includes('.sh'));
+  });
+
+  it('is opt-in only', () => {
+    assert.equal(typos.optIn, true);
   });
 
   it('builds correct command without config', () => {

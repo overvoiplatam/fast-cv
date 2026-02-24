@@ -9,6 +9,12 @@ describe('trivy adapter', () => {
     assert.ok(trivy.extensions.includes('.tf'));
     assert.ok(trivy.extensions.includes('.yaml'));
     assert.ok(trivy.installHint.includes('trivy'));
+    // expanded language support
+    assert.ok(trivy.extensions.includes('.rs'));
+    assert.ok(trivy.extensions.includes('.kt'));
+    assert.ok(trivy.extensions.includes('.cs'));
+    assert.ok(trivy.extensions.includes('.swift'));
+    assert.ok(trivy.extensions.includes('.sql'));
   });
 
   it('builds correct command without config', () => {
@@ -28,6 +34,16 @@ describe('trivy adapter', () => {
     const { args } = trivy.buildCommand('/tmp/project', '/etc/trivy.yaml');
     assert.ok(args.includes('--config'));
     assert.ok(args.includes('/etc/trivy.yaml'));
+  });
+
+  it('builds command with license scanner when licenses=true', () => {
+    const { args } = trivy.buildCommand('/tmp/project', null, { licenses: true });
+    assert.ok(args.includes('vuln,misconfig,secret,license'));
+  });
+
+  it('builds command without license scanner by default', () => {
+    const { args } = trivy.buildCommand('/tmp/project', null);
+    assert.ok(args.includes('vuln,misconfig,secret'));
   });
 
   it('parses vulnerabilities as DEPENDENCY', () => {
@@ -122,6 +138,42 @@ describe('trivy adapter', () => {
     assert.equal(findings[0].severity, 'error');
     assert.equal(findings[0].line, 10);
     assert.ok(findings[0].message.includes('AWS'));
+  });
+
+  it('parses licenses as LICENSE (HIGH/CRITICAL only)', () => {
+    const stdout = JSON.stringify({
+      Results: [{
+        Target: 'package-lock.json',
+        Licenses: [
+          {
+            Severity: 'HIGH',
+            PkgName: 'some-gpl-lib',
+            Name: 'GPL-3.0',
+          },
+          {
+            Severity: 'MEDIUM',
+            PkgName: 'permissive-lib',
+            Name: 'MIT',
+          },
+          {
+            Severity: 'CRITICAL',
+            PkgName: 'agpl-lib',
+            Name: 'AGPL-3.0',
+          },
+        ],
+      }],
+    });
+
+    const findings = trivy.parseOutput(stdout, '', 0);
+    assert.equal(findings.length, 2);
+    assert.equal(findings[0].tag, 'LICENSE');
+    assert.equal(findings[0].rule, 'GPL-3.0');
+    assert.equal(findings[0].severity, 'error');
+    assert.ok(findings[0].message.includes('some-gpl-lib'));
+    assert.ok(findings[0].message.includes('GPL-3.0'));
+    assert.equal(findings[1].tag, 'LICENSE');
+    assert.equal(findings[1].rule, 'AGPL-3.0');
+    assert.ok(findings[1].message.includes('agpl-lib'));
   });
 
   it('parses mixed results', () => {

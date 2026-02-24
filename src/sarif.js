@@ -5,6 +5,7 @@ const TAG_LEVEL = {
   BUG: 'error',
   PRIVACY: 'error',
   SECRET: 'error',
+  LICENSE: 'error',
   REFACTOR: 'warning',
   LINTER: 'warning',
   DEPENDENCY: 'warning',
@@ -12,6 +13,7 @@ const TAG_LEVEL = {
   TYPE_ERROR: 'warning',
   DOCS: 'warning',
   TYPO: 'warning',
+  DEAD_CODE: 'warning',
   FORMAT: 'note',
   DUPLICATION: 'note',
 };
