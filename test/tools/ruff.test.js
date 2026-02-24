@@ -17,6 +17,7 @@ describe('ruff adapter', () => {
     assert.ok(args.includes('json'));
     assert.ok(args.includes('/tmp/project'));
     assert.ok(!args.includes('--config'));
+    assert.ok(args.includes('--no-fix'));
   });
 
   it('builds correct command with config', () => {
@@ -24,6 +25,34 @@ describe('ruff adapter', () => {
     assert.equal(bin, 'ruff');
     assert.ok(args.includes('--config'));
     assert.ok(args.includes('/etc/ruff.toml'));
+  });
+
+  it('builds command with --fix flag', () => {
+    const { args } = ruff.buildCommand('/tmp/project', null, { fix: true });
+    assert.ok(args.includes('--fix'));
+    assert.ok(!args.includes('--no-fix'));
+  });
+
+  it('builds command with files list', () => {
+    const { args } = ruff.buildCommand('/tmp/project', null, { files: ['src/a.py', 'src/b.py'] });
+    assert.ok(args.includes('src/a.py'));
+    assert.ok(args.includes('src/b.py'));
+    assert.ok(!args.includes('/tmp/project'));
+  });
+
+  it('returns preFixCommands for ruff format', () => {
+    const cmds = ruff.preFixCommands('/tmp/project', null, { files: [] });
+    assert.equal(cmds.length, 1);
+    assert.equal(cmds[0].bin, 'ruff');
+    assert.ok(cmds[0].args.includes('format'));
+    assert.ok(cmds[0].args.includes('/tmp/project'));
+  });
+
+  it('preFixCommands uses files when provided', () => {
+    const cmds = ruff.preFixCommands('/tmp/project', '/etc/ruff.toml', { files: ['a.py'] });
+    assert.ok(cmds[0].args.includes('a.py'));
+    assert.ok(!cmds[0].args.includes('/tmp/project'));
+    assert.ok(cmds[0].args.includes('--config'));
   });
 
   it('parses valid JSON output', () => {
@@ -96,8 +125,28 @@ describe('ruff adapter', () => {
     assert.equal(ruff.parseOutput(make('SIM110'), '', 1)[0].tag, 'REFACTOR');
     assert.equal(ruff.parseOutput(make('UP035'), '', 1)[0].tag, 'REFACTOR');
     assert.equal(ruff.parseOutput(make('PERF401'), '', 1)[0].tag, 'REFACTOR');
+    assert.equal(ruff.parseOutput(make('C901'), '', 1)[0].tag, 'REFACTOR');
+    assert.equal(ruff.parseOutput(make('PLR0915'), '', 1)[0].tag, 'REFACTOR');
+    assert.equal(ruff.parseOutput(make('PLR0913'), '', 1)[0].tag, 'REFACTOR');
     assert.equal(ruff.parseOutput(make('B006'), '', 1)[0].tag, 'BUG');
     assert.equal(ruff.parseOutput(make('F401'), '', 1)[0].tag, 'LINTER');
+
+    // New rule families
+    assert.equal(ruff.parseOutput(make('BLE001'), '', 1)[0].tag, 'BUG');
+    assert.equal(ruff.parseOutput(make('A001'), '', 1)[0].tag, 'BUG');
+    assert.equal(ruff.parseOutput(make('A003'), '', 1)[0].tag, 'BUG');
+    assert.equal(ruff.parseOutput(make('RUF001'), '', 1)[0].tag, 'BUG');
+    assert.equal(ruff.parseOutput(make('RUF012'), '', 1)[0].tag, 'BUG');
+    assert.equal(ruff.parseOutput(make('ERA001'), '', 1)[0].tag, 'REFACTOR');
+    assert.equal(ruff.parseOutput(make('ARG001'), '', 1)[0].tag, 'REFACTOR');
+    assert.equal(ruff.parseOutput(make('ARG005'), '', 1)[0].tag, 'REFACTOR');
+    assert.equal(ruff.parseOutput(make('PTH100'), '', 1)[0].tag, 'REFACTOR');
+    assert.equal(ruff.parseOutput(make('PTH118'), '', 1)[0].tag, 'REFACTOR');
+
+    // Documentation rules (pydocstyle)
+    assert.equal(ruff.parseOutput(make('D101'), '', 1)[0].tag, 'DOCS');
+    assert.equal(ruff.parseOutput(make('D103'), '', 1)[0].tag, 'DOCS');
+    assert.equal(ruff.parseOutput(make('D205'), '', 1)[0].tag, 'DOCS');
   });
 
   it('checkInstalled returns boolean', async () => {

@@ -1,6 +1,6 @@
 {
   "name": "fast-cv",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Fast Code Validation — orchestrates linters and security scanners with unified Markdown reports",
   "type": "module",
   "bin": {

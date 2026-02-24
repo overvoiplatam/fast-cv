@@ -5,14 +5,16 @@ const execFileAsync = promisify(execFile);
 
 function classifyRule(code) {
   if (!code) return 'LINTER';
-  // Refactor rules (must check before S* to avoid SIM matching SECURITY)
-  if (/^(SIM|UP|PERF|C4|RET|PIE)/.test(code)) return 'REFACTOR';
-  // Security rules (S prefix, but not SIM/etc)
+  // Refactor rules (must check multi-char prefixes before single-char)
+  if (/^(SIM|UP|PERF|C4|RET|PIE|C90|PLR|PTH|ERA|ARG)/.test(code)) return 'REFACTOR';
+  // Security rules (S prefix, but not SIM/etc — checked after multi-char)
   if (/^S\d/.test(code)) return 'SECURITY';
   // Format rules (pycodestyle errors/warnings, isort)
   if (/^[EWI]\d/.test(code)) return 'FORMAT';
-  // Bugbear
-  if (code.startsWith('B')) return 'BUG';
+  // Documentation rules (pydocstyle)
+  if (/^D\d/.test(code)) return 'DOCS';
+  // Bug detection (bugbear B*, blind-except BLE*, builtins A*, ruff-specific RUF*)
+  if (/^(B|RUF|A\d)/.test(code)) return 'BUG';
   // Default: linter
   return 'LINTER';
 }
@@ -28,13 +30,31 @@ export default {
   extensions: ['.py', '.pyi'],
   installHint: 'pipx install ruff  (or: pip3 install --user ruff)',
 
-  buildCommand(targetDir, configPath) {
-    const args = ['check', '--output-format', 'json', '--no-fix'];
+  buildCommand(targetDir, configPath, { files = [], fix = false } = {}) {
+    const args = ['check', '--output-format', 'json'];
+    args.push(fix ? '--fix' : '--no-fix');
     if (configPath) {
       args.push('--config', configPath);
     }
-    args.push(targetDir);
+    if (files.length > 0) {
+      args.push(...files);
+    } else {
+      args.push(targetDir);
+    }
     return { bin: 'ruff', args };
+  },
+
+  preFixCommands(targetDir, configPath, { files = [] } = {}) {
+    const args = ['format'];
+    if (configPath) {
+      args.push('--config', configPath);
+    }
+    if (files.length > 0) {
+      args.push(...files);
+    } else {
+      args.push(targetDir);
+    }
+    return [{ bin: 'ruff', args }];
   },
 
   parseOutput(stdout, stderr, exitCode) {

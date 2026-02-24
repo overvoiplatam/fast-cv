@@ -3,16 +3,39 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+const REFACTOR_LINTERS = new Set([
+  'gocognit', 'cyclop', 'funlen', 'gocyclo', 'maintidx', 'nestif',
+]);
+
+const BUG_LINTERS = new Set([
+  'govet', 'staticcheck', 'ineffassign', 'unused', 'errcheck', 'bodyclose', 'nilerr',
+]);
+
+const SECURITY_LINTERS = new Set([
+  'gosec',
+]);
+
+function classifyLinter(linterName) {
+  if (!linterName) return 'LINTER';
+  if (REFACTOR_LINTERS.has(linterName)) return 'REFACTOR';
+  if (BUG_LINTERS.has(linterName)) return 'BUG';
+  if (SECURITY_LINTERS.has(linterName)) return 'SECURITY';
+  return 'LINTER';
+}
+
 export default {
   name: 'golangci-lint',
   extensions: ['.go'],
   installHint: 'curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ~/.local/bin',
 
-  buildCommand(targetDir, configPath) {
+  buildCommand(targetDir, configPath, { files = [], fix = false } = {}) {
     const args = ['run', '--out-format', 'json'];
     if (configPath) {
       args.push('--config', configPath);
+    } else {
+      args.push('--enable', 'gocognit,gocritic');
     }
+    if (fix) args.push('--fix');
     args.push('./...');
     return { bin: 'golangci-lint', args, cwd: targetDir };
   },
@@ -38,7 +61,7 @@ export default {
       file: item.Pos?.Filename || 'unknown',
       line: item.Pos?.Line || 0,
       col: item.Pos?.Column || undefined,
-      tag: 'LINTER',
+      tag: classifyLinter(item.FromLinter),
       rule: item.FromLinter || 'unknown',
       severity: item.Severity === 'error' ? 'error' : 'warning',
       message: item.Text || 'Issue detected',

@@ -110,6 +110,32 @@ async function loadIgnoreFile(filePath) {
   }
 }
 
+const GLOB_CHARS = /[*?{!]/;
+
+export function createOnlyFilter(patterns) {
+  if (!patterns || patterns.length === 0) return null;
+
+  const ig = ignore();
+  // The ignore library treats patterns as exclusion rules, but we use it
+  // to test inclusion: a file "matches" if ig.ignores(relPath) === true.
+  ig.add(patterns);
+
+  return {
+    /** Returns true if the file matches the --only patterns */
+    includes(relPath) {
+      // For literal paths (no glob chars), also check exact match
+      for (const p of patterns) {
+        if (!GLOB_CHARS.test(p) && relPath === p) return true;
+      }
+      try {
+        return ig.ignores(relPath);
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
 export async function createIgnoreFilter(targetDir, { exclude = [] } = {}) {
   const ig = ignore();
 
@@ -131,8 +157,9 @@ export async function createIgnoreFilter(targetDir, { exclude = [] } = {}) {
   return ig;
 }
 
-export async function pruneDirectory(targetDir, { exclude = [] } = {}) {
+export async function pruneDirectory(targetDir, { exclude = [], only = [] } = {}) {
   const ignoreFilter = await createIgnoreFilter(targetDir, { exclude });
+  const onlyFilter = createOnlyFilter(only);
 
   // Walk directory
   const entries = await readdir(targetDir, { recursive: true, withFileTypes: true });
@@ -151,10 +178,13 @@ export async function pruneDirectory(targetDir, { exclude = [] } = {}) {
     const ext = extname(entry.name).toLowerCase();
     if (!SCANNABLE_EXTENSIONS.has(ext)) continue;
 
+    // Apply --only inclusion filter (if set, only keep matching files)
+    if (onlyFilter && !onlyFilter.includes(relPath)) continue;
+
     files.push(relPath);
     languages.add(ext);
   }
 
   files.sort();
-  return { files, languages, ignoreFilter };
+  return { files, languages, ignoreFilter, onlyFilter };
 }

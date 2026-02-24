@@ -3,3 +3,5 @@ node_modules/
 coverage/
 *.tgz
 .DS_Store
+.claude/
+.ruff_cache

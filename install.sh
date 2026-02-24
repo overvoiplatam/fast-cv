@@ -28,6 +28,19 @@ ok()    { echo -e "${GREEN}[OK]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 fail()  { echo -e "${RED}[FAIL]${NC} $*"; exit 1; }
 
+# ─── Helper: install a global npm package (user → sudo fallback) ───
+install_npm_global() {
+  local pkg="$*"
+  if npm install -g ${pkg} 2>/dev/null; then
+    return 0
+  fi
+  warn "npm install -g failed (permissions?) — retrying with sudo..."
+  if sudo npm install -g ${pkg} 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
 # ─── Helper: install a Python CLI tool (pip → pipx → uv fallback) ───
 install_python_tool() {
   local tool="$1"
@@ -203,14 +216,24 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
     install_python_tool semgrep && ok "semgrep installed" || warn "Failed to install semgrep"
   fi
 
-  # eslint (Node — install locally to avoid global permission issues)
+  # eslint (Node — global install with sudo fallback)
   if command -v eslint &>/dev/null; then
     ok "eslint already installed: $(eslint --version)"
   else
-    info "Installing eslint + eslint-plugin-security..."
-    npm install -g eslint eslint-plugin-security 2>/dev/null \
+    info "Installing eslint + eslint-plugin-security + eslint-plugin-sonarjs..."
+    install_npm_global eslint eslint-plugin-security eslint-plugin-sonarjs \
       && ok "eslint installed" \
-      || warn "Failed to install eslint globally — try: sudo npm install -g eslint eslint-plugin-security"
+      || warn "Failed to install eslint"
+  fi
+
+  # jscpd (Node — code duplication detector)
+  if command -v jscpd &>/dev/null; then
+    ok "jscpd already installed: $(jscpd --version 2>/dev/null || echo 'version unknown')"
+  else
+    info "Installing jscpd..."
+    install_npm_global jscpd \
+      && ok "jscpd installed" \
+      || warn "Failed to install jscpd"
   fi
 
   # bearer (binary)
@@ -236,6 +259,57 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
       warn "Failed to install golangci-lint — you can install it manually later"
     fi
   fi
+
+  # trivy (binary)
+  if command -v trivy &>/dev/null; then
+    ok "trivy already installed: $(trivy --version 2>/dev/null | head -1)"
+  else
+    info "Installing trivy..."
+    if curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "${LOCAL_BIN}" 2>/dev/null; then
+      ok "trivy installed to ${LOCAL_BIN}"
+    else
+      warn "Failed to install trivy — you can install it manually later"
+    fi
+  fi
+
+  # mypy (Python)
+  if command -v mypy &>/dev/null; then
+    ok "mypy already installed: $(mypy --version)"
+  else
+    install_python_tool mypy && ok "mypy installed" || warn "Failed to install mypy"
+  fi
+
+  # typos (Rust binary — try cargo, then pre-built binary)
+  if command -v typos &>/dev/null; then
+    ok "typos already installed: $(typos --version 2>/dev/null)"
+  else
+    info "Installing typos-cli..."
+    TYPOS_INSTALLED=false
+    # Try cargo first
+    if command -v cargo &>/dev/null; then
+      cargo install typos-cli 2>/dev/null && TYPOS_INSTALLED=true
+    fi
+    # Fallback: download pre-built binary from GitHub
+    if [[ "${TYPOS_INSTALLED}" == "false" ]]; then
+      info "Downloading typos pre-built binary..."
+      TYPOS_ARCH="$(uname -m)"
+      case "${OS}" in
+        Linux)  TYPOS_TARGET="${TYPOS_ARCH}-unknown-linux-musl" ;;
+        Darwin) TYPOS_TARGET="${TYPOS_ARCH}-apple-darwin" ;;
+      esac
+      TYPOS_URL="$(curl -sfL https://api.github.com/repos/crate-ci/typos/releases/latest \
+        | grep "browser_download_url.*${TYPOS_TARGET}.*tar.gz\"" \
+        | head -1 | cut -d '"' -f 4)"
+      if [[ -n "${TYPOS_URL}" ]]; then
+        curl -sfL "${TYPOS_URL}" | tar xz -C "${LOCAL_BIN}" --strip-components=0 ./typos 2>/dev/null && TYPOS_INSTALLED=true
+      fi
+    fi
+    if [[ "${TYPOS_INSTALLED}" == "true" ]]; then
+      ok "typos installed"
+    else
+      warn "Failed to install typos — install manually: cargo install typos-cli"
+    fi
+  fi
 else
   info "Skipping tool dependencies (mode: ${INSTALL_MODE})"
 fi
@@ -254,13 +328,37 @@ if [[ "${INSTALL_MODE}" == "all" || "${INSTALL_MODE}" == "configs" ]]; then
   for f in "${SCRIPT_DIR}"/defaults/*; do
     fname="$(basename "$f")"
     dest="${CONFIG_DIR}/${fname}"
-    if [[ -f "${dest}" ]] && [[ "${OVERWRITE}" == "false" ]]; then
+    if [[ -d "$f" ]]; then
+      # Directory (e.g. semgrep/) — recursive copy
+      if [[ -d "${dest}" ]] && [[ "${OVERWRITE}" == "false" ]]; then
+        ok "Config dir ${fname}/ already exists, skipping"
+      else
+        cp -r "$f" "${dest}"
+        ok "Copied ${fname}/ to ${CONFIG_DIR}/"
+      fi
+    elif [[ -f "${dest}" ]] && [[ "${OVERWRITE}" == "false" ]]; then
       ok "Config ${fname} already exists, skipping"
     else
       cp "$f" "${dest}"
       ok "Copied ${fname} to ${CONFIG_DIR}/"
     fi
   done
+
+  # Download OWASP Top 10 semgrep rules for offline scanning
+  SEMGREP_DIR="${CONFIG_DIR}/semgrep"
+  mkdir -p "${SEMGREP_DIR}"
+  OWASP_DEST="${SEMGREP_DIR}/owasp-top-ten.yaml"
+  if [[ -f "${OWASP_DEST}" ]] && [[ "${OVERWRITE}" == "false" ]]; then
+    ok "OWASP semgrep rules already downloaded"
+  else
+    info "Downloading OWASP Top 10 semgrep rules (543 rules, offline after this)..."
+    if curl -sfL "https://semgrep.dev/c/p/owasp-top-ten" -o "${OWASP_DEST}" 2>/dev/null; then
+      RULE_COUNT=$(grep -c '^- id:' "${OWASP_DEST}" 2>/dev/null || echo '?')
+      ok "OWASP rules downloaded (${RULE_COUNT} rules) to ${SEMGREP_DIR}/"
+    else
+      warn "Failed to download OWASP rules — semgrep will use custom taint rules only"
+    fi
+  fi
 else
   info "Skipping config files (mode: ${INSTALL_MODE})"
 fi

@@ -18,14 +18,18 @@ export default {
   extensions: ['.py', '.js', '.jsx', '.ts', '.tsx', '.go', '.java', '.rb'],
   installHint: 'pipx install semgrep  (or: pip3 install --user semgrep)',
 
-  buildCommand(targetDir, configPath) {
+  buildCommand(targetDir, configPath, { files = [] } = {}) {
     const args = ['scan', '--json', '--quiet'];
     if (configPath) {
       args.push('--config', configPath);
     } else {
       args.push('--config', 'auto');
     }
-    args.push(targetDir);
+    if (files.length > 0) {
+      args.push(...files);
+    } else {
+      args.push(targetDir);
+    }
     return { bin: 'semgrep', args };
   },
 

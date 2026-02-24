@@ -14,20 +14,20 @@ describe('precheck', () => {
     assert.equal(result.tools.length, 2);
   });
 
-  it('fails when tools are missing', async () => {
+  it('skips missing tools gracefully when some are available', async () => {
     const tools = [
       { name: 'tool-a', extensions: ['.py'], installHint: 'pip install a', checkInstalled: async () => true },
       { name: 'tool-b', extensions: ['.js'], installHint: 'npm install b', checkInstalled: async () => false },
     ];
 
     const result = await precheck(tools);
-    assert.equal(result.ok, false);
-    assert.ok(result.message.includes('PRECHECK FAILED'));
-    assert.ok(result.message.includes('tool-b'));
-    assert.ok(result.message.includes('npm install b'));
-    // tool-a should still be in ready list
+    assert.equal(result.ok, true);
+    // Only the installed tool is in ready list
     assert.equal(result.tools.length, 1);
     assert.equal(result.tools[0].name, 'tool-a');
+    // Missing tool produces a warning
+    assert.ok(result.warnings.some(w => w.includes('tool-b')));
+    assert.ok(result.warnings.some(w => w.includes('npm install b')));
   });
 
   it('includes extension info in failure message', async () => {

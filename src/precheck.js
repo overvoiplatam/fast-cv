@@ -77,9 +77,17 @@ export async function precheck(tools, options = {}) {
     return { ok: true, tools: ready, warnings };
   }
 
-  // Build failure message
+  // If some tools are ready, skip the missing ones gracefully
+  if (ready.length > 0) {
+    for (const { tool } of missing) {
+      warnings.push(`${tool.name} not found — skipped (install: ${tool.installHint})`);
+    }
+    return { ok: true, tools: ready, warnings };
+  }
+
+  // All tools missing — hard fail
   const lines = [
-    '[PRECHECK FAILED] Missing tools for detected languages:\n',
+    '[PRECHECK FAILED] No tools available — all applicable tools are missing:\n',
     '',
   ];
 

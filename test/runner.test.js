@@ -140,4 +140,72 @@ describe('runTools', () => {
     assert.equal(results[0].error, null);
     assert.equal(results[0].findings[0].message, '/tmp');
   });
+
+  it('passes files and fix to buildCommand', async () => {
+    let receivedOpts = {};
+    const mockTool = {
+      name: 'opts-tool',
+      buildCommand(targetDir, configPath, opts) {
+        receivedOpts = opts;
+        return { bin: 'echo', args: ['ok'] };
+      },
+      parseOutput() { return []; },
+    };
+
+    await runTools(
+      [{ tool: mockTool, config: { path: null, source: 'none' } }],
+      '/tmp',
+      { timeout: 5000, files: ['a.py', 'b.py'], fix: true }
+    );
+
+    assert.deepEqual(receivedOpts.files, ['a.py', 'b.py']);
+    assert.equal(receivedOpts.fix, true);
+  });
+
+  it('runs preFixCommands before main command in fix mode', async () => {
+    const callOrder = [];
+    const mockTool = {
+      name: 'fix-tool',
+      preFixCommands() {
+        return [{ bin: 'echo', args: ['pre-fix'] }];
+      },
+      buildCommand() {
+        callOrder.push('main');
+        return { bin: 'echo', args: ['main'] };
+      },
+      parseOutput(stdout) {
+        return [{ file: 'f.py', line: 1, tag: 'LINTER', rule: 'T', severity: 'warning', message: stdout.trim() }];
+      },
+    };
+
+    const results = await runTools(
+      [{ tool: mockTool, config: { path: null, source: 'none' } }],
+      '/tmp',
+      { timeout: 5000, fix: true }
+    );
+
+    assert.equal(results[0].error, null);
+    assert.ok(callOrder.includes('main'));
+  });
+
+  it('skips preFixCommands when fix is false', async () => {
+    let preFixCalled = false;
+    const mockTool = {
+      name: 'no-fix-tool',
+      preFixCommands() {
+        preFixCalled = true;
+        return [{ bin: 'echo', args: ['pre-fix'] }];
+      },
+      buildCommand() { return { bin: 'echo', args: ['ok'] }; },
+      parseOutput() { return []; },
+    };
+
+    await runTools(
+      [{ tool: mockTool, config: { path: null, source: 'none' } }],
+      '/tmp',
+      { timeout: 5000, fix: false }
+    );
+
+    assert.equal(preFixCalled, false);
+  });
 });

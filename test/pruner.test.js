@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { pruneDirectory, createIgnoreFilter } from '../src/pruner.js';
+import { pruneDirectory, createIgnoreFilter, createOnlyFilter } from '../src/pruner.js';
 
 describe('pruneDirectory', () => {
   let tmpDir;
@@ -145,6 +145,38 @@ describe('pruneDirectory', () => {
     assert.ok(ignoreFilter);
     assert.ok(typeof ignoreFilter.ignores === 'function');
   });
+
+  it('applies --only with exact file path', async () => {
+    await writeFile(join(tmpDir, 'keep.py'), 'x=1');
+    await writeFile(join(tmpDir, 'skip.py'), 'y=2');
+
+    const { files } = await pruneDirectory(tmpDir, { only: ['keep.py'] });
+    assert.ok(files.includes('keep.py'));
+    assert.ok(!files.includes('skip.py'));
+  });
+
+  it('applies --only with glob pattern', async () => {
+    await mkdir(join(tmpDir, 'src', 'api'), { recursive: true });
+    await writeFile(join(tmpDir, 'src', 'api', 'routes.py'), '');
+    await writeFile(join(tmpDir, 'src', 'api', 'models.py'), '');
+    await writeFile(join(tmpDir, 'other.js'), '');
+
+    const { files } = await pruneDirectory(tmpDir, { only: ['src/api/*.py'] });
+    assert.ok(files.some(f => f.includes('routes.py')));
+    assert.ok(files.some(f => f.includes('models.py')));
+    assert.ok(!files.includes('other.js'));
+  });
+
+  it('returns onlyFilter from pruneDirectory when --only is set', async () => {
+    const { onlyFilter } = await pruneDirectory(tmpDir, { only: ['*.py'] });
+    assert.ok(onlyFilter);
+    assert.ok(typeof onlyFilter.includes === 'function');
+  });
+
+  it('returns null onlyFilter when --only is not set', async () => {
+    const { onlyFilter } = await pruneDirectory(tmpDir);
+    assert.equal(onlyFilter, null);
+  });
 });
 
 describe('createIgnoreFilter', () => {
@@ -194,5 +226,32 @@ describe('createIgnoreFilter', () => {
     await writeFile(join(tmpDir, '.fcvignore'), 'generated/\n');
     const ig = await createIgnoreFilter(tmpDir);
     assert.ok(ig.ignores('generated/auto.js'));
+  });
+});
+
+describe('createOnlyFilter', () => {
+  it('returns null for empty patterns', () => {
+    assert.equal(createOnlyFilter([]), null);
+    assert.equal(createOnlyFilter(null), null);
+  });
+
+  it('matches exact file paths', () => {
+    const filter = createOnlyFilter(['src/app.py']);
+    assert.ok(filter.includes('src/app.py'));
+    assert.ok(!filter.includes('src/other.py'));
+  });
+
+  it('matches glob patterns', () => {
+    const filter = createOnlyFilter(['src/**/*.py']);
+    assert.ok(filter.includes('src/app.py'));
+    assert.ok(filter.includes('src/utils/helper.py'));
+    assert.ok(!filter.includes('lib/thing.js'));
+  });
+
+  it('matches multiple patterns', () => {
+    const filter = createOnlyFilter(['src/a.py', 'lib/**/*.js']);
+    assert.ok(filter.includes('src/a.py'));
+    assert.ok(filter.includes('lib/utils/x.js'));
+    assert.ok(!filter.includes('src/b.py'));
   });
 });

@@ -1,19 +1,22 @@
 import { relative, isAbsolute } from 'node:path';
 
-export function filterFindings(results, targetDir, ignoreFilter) {
+export function filterFindings(results, targetDir, ignoreFilter, onlyFilter) {
   return results.map(result => {
     if (result.error || !result.findings || result.findings.length === 0) return result;
 
     const filtered = result.findings.filter(f => {
       const relPath = isAbsolute(f.file) ? relative(targetDir, f.file) : f.file;
-      return !ignoreFilter.ignores(relPath);
+      if (ignoreFilter.ignores(relPath)) return false;
+      // If --only is active, strip findings outside the inclusion set
+      if (onlyFilter && !onlyFilter.includes(relPath)) return false;
+      return true;
     });
 
     return { ...result, findings: filtered };
   });
 }
 
-export function formatReport({ targetDir, results, warnings = [] }) {
+export function formatReport({ targetDir, results, warnings = [], fix = false }) {
   const lines = [];
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 
@@ -31,6 +34,9 @@ export function formatReport({ targetDir, results, warnings = [] }) {
   lines.push(`**Date**: ${now}`);
   if (toolSummaries.length > 0) {
     lines.push(`**Tools**: ${toolSummaries.join(', ')}`);
+  }
+  if (fix) {
+    lines.push('**Mode**: fix');
   }
   lines.push('');
   lines.push('---');

@@ -1,26 +1,57 @@
-line-length = 120
+line-length = 88
 target-version = "py310"
 
 [lint]
 select = [
+  # Base
   "E",    # pycodestyle errors
   "W",    # pycodestyle warnings
   "F",    # pyflakes
-  "S",    # flake8-bandit (security)
   "B",    # flake8-bugbear
-  "SIM",  # flake8-simplify
   "I",    # isort
-  "UP",   # pyupgrade
+  # Security
+  "S",    # flake8-bandit
+  # Complexity & refactor
+  "C90",  # mccabe complexity
+  "PLR",  # pylint refactor
+  "SIM",  # flake8-simplify
   "PERF", # perflint
   "C4",   # flake8-comprehensions
   "RET",  # flake8-return
   "PIE",  # flake8-pie
+  # Modernization
+  "UP",   # pyupgrade
+  "PTH",  # flake8-use-pathlib
+  # Bug prevention
+  "BLE",  # flake8-blind-except
+  "A",    # flake8-builtins
+  "RUF",  # ruff-specific rules
+  # Clean code
+  "ERA",  # eradicate (commented-out code)
+  "ARG",  # flake8-unused-arguments
+  # Documentation
+  "D",    # pydocstyle
 ]
 ignore = [
-  "E501", # line too long (handled by formatter)
+  "D100",  # Missing docstring in public module
+  "D104",  # Missing docstring in public package
+  "D105",  # Missing docstring in magic method
+  "D107",  # Missing docstring in __init__
 ]
 
+[lint.mccabe]
+max-complexity = 10
+
+[lint.pylint]
+max-args = 5
+max-branches = 10
+max-statements = 50
+
 [lint.per-file-ignores]
-"test_*.py" = ["S101"]  # allow assert in test files
-"*_test.py" = ["S101"]
-"tests/**" = ["S101"]
+"test_*.py" = ["S101", "ARG", "D"]
+"*_test.py" = ["S101", "ARG", "D"]
+"tests/**" = ["S101", "ARG", "D"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

@@ -17,13 +17,18 @@ const TOOL_CONFIG_FILES = {
   semgrep: ['.semgrep.yml', '.semgrep.yaml', '.semgrep/'],
   bearer: ['.bearer.yml', 'bearer.yml'],
   'golangci-lint': ['.golangci.yml', '.golangci.yaml', '.golangci.toml', '.golangci.json'],
+  jscpd: ['.jscpd.json'],
+  trivy: ['trivy.yaml', '.trivy.yaml'],
+  mypy: ['mypy.ini', '.mypy.ini', 'setup.cfg', 'pyproject.toml'],
+  typos: ['typos.toml', '.typos.toml', '_typos.toml'],
 };
 
 // Map of tool name → default config filename shipped with fast-cv
 const PACKAGE_DEFAULT_FILES = {
   ruff: 'ruff.toml',
   eslint: 'eslint.config.mjs',
-  semgrep: 'semgrep-taint.yaml',
+  semgrep: 'semgrep',  // directory — semgrep reads all YAML files inside
+  mypy: 'mypy.ini',
 };
 
 async function fileExists(filePath) {

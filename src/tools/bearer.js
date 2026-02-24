@@ -8,12 +8,16 @@ export default {
   extensions: ['.py', '.js', '.jsx', '.ts', '.tsx', '.go', '.java', '.rb', '.php'],
   installHint: 'curl -sfL https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.sh | sh -s -- -b ~/.local/bin',
 
-  buildCommand(targetDir, configPath) {
+  buildCommand(targetDir, configPath, { files = [] } = {}) {
     const args = ['scan', '--format', 'json', '--quiet'];
     if (configPath) {
       args.push('--config-file', configPath);
     }
-    args.push(targetDir);
+    if (files.length > 0) {
+      args.push(...files);
+    } else {
+      args.push(targetDir);
+    }
     return { bin: 'bearer', args };
   },
 

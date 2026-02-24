@@ -141,6 +141,29 @@ describe('formatReport', () => {
     assert.ok(report.includes('ruff'));
     assert.ok(!report.includes('**Tools**: ruff (0.4s), eslint'));
   });
+
+  it('shows fix mode in header when fix=true', () => {
+    const report = formatReport({ targetDir, results: [], warnings: [], fix: true });
+    assert.ok(report.includes('**Mode**: fix'));
+  });
+
+  it('does not show fix mode when fix=false', () => {
+    const report = formatReport({ targetDir, results: [], warnings: [], fix: false });
+    assert.ok(!report.includes('**Mode**'));
+  });
+
+  it('renders DUPLICATION tag correctly', () => {
+    const results = [{
+      tool: 'jscpd',
+      duration: 200,
+      findings: [
+        { file: 'src/a.js', line: 10, tag: 'DUPLICATION', rule: 'jscpd/javascript', severity: 'warning', message: 'Duplicated block (20 lines) — also in src/b.js:5' },
+      ],
+    }];
+    const report = formatReport({ targetDir, results, warnings: [] });
+    assert.ok(report.includes('**[DUPLICATION]**'));
+    assert.ok(report.includes('`jscpd/javascript`'));
+  });
 });
 
 describe('filterFindings', () => {
@@ -206,5 +229,37 @@ describe('filterFindings', () => {
 
     const filtered = filterFindings(results, targetDir, ig);
     assert.equal(filtered[0].findings, null);
+  });
+
+  it('applies onlyFilter to restrict findings', () => {
+    const ig = makeIgnore([]);
+    const onlyFilter = {
+      includes(relPath) { return relPath === 'src/app.js'; },
+    };
+    const results = [{
+      tool: 'eslint',
+      findings: [
+        { file: 'src/app.js', line: 1, tag: 'LINTER', rule: 'R1', message: 'keep' },
+        { file: 'src/other.js', line: 1, tag: 'LINTER', rule: 'R2', message: 'drop' },
+      ],
+    }];
+
+    const filtered = filterFindings(results, targetDir, ig, onlyFilter);
+    assert.equal(filtered[0].findings.length, 1);
+    assert.equal(filtered[0].findings[0].file, 'src/app.js');
+  });
+
+  it('does not apply onlyFilter when null', () => {
+    const ig = makeIgnore([]);
+    const results = [{
+      tool: 'eslint',
+      findings: [
+        { file: 'src/app.js', line: 1, tag: 'LINTER', rule: 'R1', message: 'keep' },
+        { file: 'src/other.js', line: 1, tag: 'LINTER', rule: 'R2', message: 'also keep' },
+      ],
+    }];
+
+    const filtered = filterFindings(results, targetDir, ig, null);
+    assert.equal(filtered[0].findings.length, 2);
   });
 });

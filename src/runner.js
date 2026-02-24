@@ -1,39 +1,64 @@
 import { spawn } from 'node:child_process';
 
-function runSingleTool(tool, configPath, targetDir, timeout) {
+function spawnAndCollect(bin, args, opts) {
   return new Promise((resolve) => {
-    const start = Date.now();
-    const { bin, args, cwd } = tool.buildCommand(targetDir, configPath);
-
     let stdout = '';
     let stderr = '';
-    let killed = false;
 
     const proc = spawn(bin, args, {
-      cwd,
+      cwd: opts.cwd,
       env: { ...process.env, NO_COLOR: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 0, // We handle timeout ourselves
+      timeout: 0,
     });
 
     proc.stdout.on('data', (chunk) => { stdout += chunk; });
     proc.stderr.on('data', (chunk) => { stderr += chunk; });
 
-    // Timeout handling
+    let killed = false;
     const timer = setTimeout(() => {
       killed = true;
       proc.kill('SIGTERM');
-      // Grace period
       setTimeout(() => {
         try { proc.kill('SIGKILL'); } catch { /* already dead */ }
       }, 5000);
-    }, timeout);
+    }, opts.timeout);
 
     proc.on('close', (exitCode) => {
       clearTimeout(timer);
+      resolve({ stdout, stderr, exitCode, killed });
+    });
+
+    proc.on('error', (err) => {
+      clearTimeout(timer);
+      resolve({ stdout: '', stderr: err.message, exitCode: -1, killed: false, spawnError: err });
+    });
+  });
+}
+
+function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false } = {}) {
+  return new Promise(async (resolve) => {
+    const start = Date.now();
+
+    try {
+      // Run preFixCommands sequentially if in fix mode and tool supports them
+      if (fix && typeof tool.preFixCommands === 'function') {
+        const preCmds = tool.preFixCommands(targetDir, configPath, { files });
+        for (const cmd of preCmds) {
+          await spawnAndCollect(cmd.bin, cmd.args, {
+            cwd: cmd.cwd,
+            timeout,
+          });
+        }
+      }
+
+      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files, fix });
+
+      const result = await spawnAndCollect(bin, args, { cwd, timeout });
+
       const duration = Date.now() - start;
 
-      if (killed) {
+      if (result.killed) {
         resolve({
           tool: tool.name,
           findings: [],
@@ -43,8 +68,18 @@ function runSingleTool(tool, configPath, targetDir, timeout) {
         return;
       }
 
+      if (result.spawnError) {
+        resolve({
+          tool: tool.name,
+          findings: [],
+          error: `Failed to spawn ${bin}: ${result.spawnError.message}`,
+          duration,
+        });
+        return;
+      }
+
       try {
-        const findings = tool.parseOutput(stdout, stderr, exitCode);
+        const findings = tool.parseOutput(result.stdout, result.stderr, result.exitCode);
         resolve({
           tool: tool.name,
           findings,
@@ -59,26 +94,25 @@ function runSingleTool(tool, configPath, targetDir, timeout) {
           duration,
         });
       }
-    });
-
-    proc.on('error', (err) => {
-      clearTimeout(timer);
+    } catch (err) {
       const duration = Date.now() - start;
       resolve({
         tool: tool.name,
         findings: [],
-        error: `Failed to spawn ${bin}: ${err.message}`,
+        error: `Failed to spawn ${tool.name}: ${err.message}`,
         duration,
       });
-    });
+    }
   });
 }
 
 export async function runTools(toolConfigs, targetDir, options = {}) {
   const timeout = options.timeout || 120000;
+  const files = options.files || [];
+  const fix = options.fix || false;
 
   const promises = toolConfigs.map(({ tool, config }) =>
-    runSingleTool(tool, config.path, targetDir, timeout)
+    runSingleTool(tool, config.path, targetDir, timeout, { files, fix })
   );
 
   const settled = await Promise.allSettled(promises);
