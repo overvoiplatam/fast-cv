@@ -286,6 +286,23 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
     install_python_tool vulture && ok "vulture installed" || warn "Failed to install vulture"
   fi
 
+  # stylelint (Node — CSS linter)
+  if command -v stylelint &>/dev/null; then
+    ok "stylelint already installed: $(stylelint --version 2>/dev/null || echo 'version unknown')"
+  else
+    info "Installing stylelint + stylelint-config-standard..."
+    install_npm_global stylelint stylelint-config-standard \
+      && ok "stylelint installed" \
+      || warn "Failed to install stylelint"
+  fi
+
+  # sqlfluff (Python — SQL linter)
+  if command -v sqlfluff &>/dev/null; then
+    ok "sqlfluff already installed: $(sqlfluff version 2>/dev/null || echo 'version unknown')"
+  else
+    install_python_tool sqlfluff && ok "sqlfluff installed" || warn "Failed to install sqlfluff"
+  fi
+
   # typos (Rust binary — try cargo, then pre-built binary)
   if command -v typos &>/dev/null; then
     ok "typos already installed: $(typos --version 2>/dev/null)"

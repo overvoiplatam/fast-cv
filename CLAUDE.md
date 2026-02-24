@@ -9,7 +9,7 @@ Node.js ESM, v0.2.0, 3 dependencies, zero build step.
 npm test                              # all tests (node --test)
 node bin/fast-cv.js --tools=eslint .  # self-scan (JS only, fast)
 node bin/fast-cv.js .                 # full scan
-node bin/fast-cv.js --fix .           # auto-fix (ruff, eslint, golangci-lint)
+node bin/fast-cv.js --fix .           # auto-fix (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff)
 node bin/fast-cv.js --format sarif .  # SARIF output
 ```
 
@@ -26,8 +26,8 @@ node bin/fast-cv.js --format sarif .  # SARIF output
 | `src/runner.js` | 130 | Parallel execution via Promise.allSettled |
 | `src/normalizer.js` | 109 | Markdown report + post-filter |
 | `src/sarif.js` | 103 | SARIF 2.1.0 output |
-| `src/tools/*.js` | 11 files | One adapter per tool |
-| `defaults/` | dir | Shipped configs (ruff, eslint, mypy, semgrep) |
+| `src/tools/*.js` | 15 files | One adapter per tool |
+| `defaults/` | dir | Shipped configs (ruff, eslint, mypy, semgrep, stylelint) |
 
 ## Code Conventions
 
@@ -48,7 +48,7 @@ Canonical source: [docs/tools.md](docs/tools.md)
 
 Every change must satisfy:
 
-1. `npm test` passes (all 17 test files)
+1. `npm test` passes (all 21 test files)
 2. `node bin/fast-cv.js .` exits clean (exit code 0)
 3. New tools: adapter in `src/tools/` + test in `test/tools/` + entry in `src/tools/index.js`
 4. New configs: registered in `src/config-resolver.js` + shipped in `defaults/`

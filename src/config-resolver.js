@@ -23,6 +23,13 @@ const TOOL_CONFIG_FILES = {
   typos: ['typos.toml', '.typos.toml', '_typos.toml'],
   vulture: [],  // reads pyproject.toml [tool.vulture] natively
   knip: ['knip.json', 'knip.jsonc', '.knip.json'],
+  tsc: ['tsconfig.json'],
+  clippy: ['clippy.toml', '.clippy.toml'],
+  stylelint: [
+    '.stylelintrc', '.stylelintrc.json', '.stylelintrc.yml', '.stylelintrc.yaml',
+    'stylelint.config.js', 'stylelint.config.mjs', 'stylelint.config.cjs',
+  ],
+  sqlfluff: ['.sqlfluff', 'setup.cfg', 'pyproject.toml'],
 };
 
 // Map of tool name → default config filename shipped with fast-cv
@@ -31,6 +38,7 @@ const PACKAGE_DEFAULT_FILES = {
   eslint: 'eslint.config.mjs',
   semgrep: 'semgrep',  // directory — semgrep reads all YAML files inside
   mypy: 'mypy.ini',
+  stylelint: '.stylelintrc.json',
 };
 
 async function fileExists(filePath) {

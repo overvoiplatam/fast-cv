@@ -10,5 +10,9 @@ import mypy from './mypy.js';
 import typos from './typos.js';
 import vulture from './vulture.js';
 import knip from './knip.js';
+import tsc from './tsc.js';
+import clippy from './clippy.js';
+import stylelint from './stylelint.js';
+import sqlfluff from './sqlfluff.js';
 
-export const tools = [ruff, eslint, semgrep, bearer, golangciLint, jscpd, trivy, mypy, typos, vulture, knip];
+export const tools = [ruff, eslint, semgrep, bearer, golangciLint, jscpd, trivy, mypy, typos, vulture, knip, tsc, clippy, stylelint, sqlfluff];

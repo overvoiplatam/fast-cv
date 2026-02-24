@@ -17,6 +17,10 @@ A local, offline CLI tool that orchestrates multiple linters and security scanne
 | [vulture](https://github.com/jendrikseipp/vulture) | Python | `[DEAD_CODE]` |
 | [typos](https://github.com/crate-ci/typos) | All supported languages | `[TYPO]` (opt-in) |
 | [knip](https://knip.dev) | JS, TS | `[DEAD_CODE]` |
+| [tsc](https://www.typescriptlang.org) | TypeScript | `[TYPE_ERROR]` |
+| [clippy](https://github.com/rust-lang/rust-clippy) | Rust | `[LINTER]` `[BUG]` `[REFACTOR]` |
+| [stylelint](https://stylelint.io) | CSS, SCSS, SASS, LESS | `[LINTER]` `[FORMAT]` |
+| [sqlfluff](https://sqlfluff.com) | SQL | `[LINTER]` `[FORMAT]` `[BUG]` |
 
 Tools are automatically selected based on detected file types. Missing tools are skipped gracefully. Tools marked **(opt-in)** only run when explicitly requested via `--tools`.
 
@@ -28,25 +32,23 @@ What fast-cv checks per language. Columns use checkmarks for clarity; tool names
 |----------|:-------:|:----:|:---:|:-----:|:-------:|:---------:|:-----------:|:-------:|:-----------:|
 | **Python** | ruff | semgrep | trivy | mypy | bearer | vulture | jscpd | typos | trivy |
 | **JavaScript** | eslint | semgrep | trivy | — | bearer | knip | jscpd | typos | trivy |
-| **TypeScript** | eslint | semgrep | trivy | — | bearer | knip | jscpd | typos | trivy |
+| **TypeScript** | eslint | semgrep | trivy | tsc | bearer | knip | jscpd | typos | trivy |
 | **Go** | golangci-lint | semgrep | trivy | — | bearer | — | jscpd | typos | trivy |
 | **Java** | — | semgrep | trivy | — | bearer | — | jscpd | typos | trivy |
 | **Ruby** | — | semgrep | trivy | — | bearer | — | jscpd | typos | trivy |
 | **PHP** | — | semgrep | trivy | — | bearer | — | jscpd | typos | trivy |
-| **Rust** | — | semgrep | trivy | — | — | — | jscpd | typos | trivy |
+| **Rust** | clippy | semgrep | trivy | — | — | — | jscpd | typos | trivy |
 | **C/C++** | — | semgrep | trivy | — | — | — | jscpd | typos | trivy |
 | **C#** | — | semgrep | trivy | — | — | — | jscpd | typos | trivy |
 | **Kotlin** | — | semgrep | trivy | — | — | — | jscpd | typos | trivy |
 | **Swift** | — | semgrep | trivy | — | — | — | jscpd | typos | trivy |
 | **Scala** | — | semgrep | — | — | — | — | jscpd | typos | — |
-| **SQL** | — | — | trivy | — | — | — | jscpd | typos | — |
-| **HTML** | — | — | — | — | — | — | — | — | — |
-| **CSS/SCSS** | — | — | — | — | — | — | — | — | — |
+| **SQL** | sqlfluff | — | trivy | — | — | — | jscpd | typos | — |
+| **CSS/SCSS** | stylelint | — | — | — | — | — | jscpd | typos | — |
 
 \* typos is an **opt-in** tool (requires `--tools=typos`).
 
-**Best covered**: Python (8 tools), JavaScript/TypeScript (7 tools), Go (6 tools).
-**Not covered**: HTML, CSS/SCSS/SASS/LESS — fast-cv focuses on backend, infrastructure, and security. Use dedicated frontend linters (stylelint, htmlhint) for these.
+**Best covered**: Python (8 tools), TypeScript (8 tools), JavaScript (7 tools), Go (6 tools), Rust (5 tools).
 
 ## Security Architecture
 
@@ -95,6 +97,7 @@ When a previous installation is detected, the installer prompts you to choose:
 - python3 + pip3 (for ruff, semgrep, mypy, vulture)
 - curl (for bearer, golangci-lint, trivy installers + OWASP rules download)
 - cargo (optional, for typos-cli)
+- Rust toolchain with clippy (optional, for clippy: `rustup component add clippy`)
 - npx (for knip, included with Node.js)
 
 ## Usage
@@ -209,6 +212,10 @@ Fix support varies by tool:
 | **typos** | No fix capability. Reports spelling mistakes. |
 | **vulture** | No fix capability. Reports dead code in Python. |
 | **knip** | No fix capability. Reports unused files, exports, and dependencies in JS/TS. |
+| **tsc** | No fix capability. Reports type errors only. |
+| **clippy** | Adds `--fix --allow-dirty --allow-staged` via cargo. Applies safe auto-fixes. |
+| **stylelint** | Adds `--fix` to the scan command. Applies fixes and reports remaining in one pass. |
+| **sqlfluff** | Uses `fix` subcommand with `--force`. Applies formatting fixes. |
 
 When `--fix` is active, the report header shows `**Mode**: fix`.
 
@@ -378,6 +385,10 @@ When a finding is intentional (e.g. a webhook field name dictated by an external
 | **typos** | `// typos:disable-next-line` or `# typos:disable-next-line` |
 | **golangci-lint** | `//nolint:lintername` |
 | **bearer** | `// bearer:disable rule_id` |
+| **tsc** | `// @ts-ignore` or `// @ts-expect-error` |
+| **clippy** | `#[allow(clippy::rule_name)]` |
+| **stylelint** | `/* stylelint-disable rule */` |
+| **sqlfluff** | `-- noqa: rule` |
 
 These comments are understood natively by each tool — fast-cv does not strip or process them.
 

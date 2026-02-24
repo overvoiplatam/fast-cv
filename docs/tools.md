@@ -26,11 +26,11 @@ export default {
 
 | Option | Type | Used By |
 |--------|------|---------|
-| `files` | `string[]` | ruff, eslint, semgrep, bearer, mypy, typos, vulture |
-| `fix` | `boolean` | ruff, eslint, golangci-lint |
+| `files` | `string[]` | ruff, eslint, semgrep, bearer, mypy, typos, vulture, stylelint, sqlfluff |
+| `fix` | `boolean` | ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff |
 | `licenses` | `boolean` | trivy |
 
-## All Tools (11)
+## All Tools (15)
 
 | # | Name | File | Extensions | Tags | Opt-In | Fix | Config |
 |---|------|------|------------|------|--------|-----|--------|
@@ -45,6 +45,10 @@ export default {
 | 9 | typos | `src/tools/typos.js` | `.py .pyi .js .jsx .ts .tsx .go .java .rb .php .rs .c .cpp .h .cs .swift .kt .kts .sql .mts .cts .scala .sh .bash` | TYPO | **yes** | no | typos.toml |
 | 10 | vulture | `src/tools/vulture.js` | `.py .pyi` | DEAD_CODE | no | no | — |
 | 11 | knip | `src/tools/knip.js` | `.js .jsx .ts .tsx .mjs .cjs` | DEAD_CODE | no | no | — |
+| 12 | tsc | `src/tools/tsc.js` | `.ts .tsx .mts .cts` | TYPE_ERROR | no | no | tsconfig.json |
+| 13 | clippy | `src/tools/clippy.js` | `.rs` | LINTER BUG REFACTOR | no | yes | clippy.toml |
+| 14 | stylelint | `src/tools/stylelint.js` | `.css .scss .sass .less` | LINTER FORMAT | no | yes | .stylelintrc.json |
+| 15 | sqlfluff | `src/tools/sqlfluff.js` | `.sql` | LINTER FORMAT BUG | no | yes | — |
 
 ## Tag Reference
 

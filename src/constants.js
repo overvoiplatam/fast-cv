@@ -18,6 +18,7 @@ export const SCANNABLE_EXTENSIONS = [
   '.toml',
   '.tf',
   '.sql',
+  '.css', '.scss', '.sass', '.less',
 ];
 
 export function parseJsonLines(stdout) {
