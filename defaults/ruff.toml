@@ -1,0 +1,26 @@
+line-length = 120
+target-version = "py310"
+
+[lint]
+select = [
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "F",    # pyflakes
+  "S",    # flake8-bandit (security)
+  "B",    # flake8-bugbear
+  "SIM",  # flake8-simplify
+  "I",    # isort
+  "UP",   # pyupgrade
+  "PERF", # perflint
+  "C4",   # flake8-comprehensions
+  "RET",  # flake8-return
+  "PIE",  # flake8-pie
+]
+ignore = [
+  "E501", # line too long (handled by formatter)
+]
+
+[lint.per-file-ignores]
+"test_*.py" = ["S101"]  # allow assert in test files
+"*_test.py" = ["S101"]
+"tests/**" = ["S101"]

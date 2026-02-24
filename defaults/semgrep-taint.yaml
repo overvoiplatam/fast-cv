@@ -1,0 +1,65 @@
+rules:
+  - id: python-sql-injection
+    patterns:
+      - pattern: |
+          cursor.execute($QUERY, ...)
+      - metavariable-pattern:
+          metavariable: $QUERY
+          pattern: f"..."
+    message: Potential SQL injection via f-string in cursor.execute()
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      impact: HIGH
+      confidence: HIGH
+
+  - id: python-exec-injection
+    pattern: exec($INPUT)
+    message: Use of exec() with dynamic input — potential code injection
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      impact: HIGH
+
+  - id: python-eval-injection
+    pattern: eval($INPUT)
+    message: Use of eval() with dynamic input — potential code injection
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      impact: HIGH
+
+  - id: js-eval-injection
+    pattern: eval($INPUT)
+    message: Use of eval() — potential code injection
+    languages: [javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: security
+      impact: HIGH
+
+  - id: js-innerhtml-xss
+    pattern: $EL.innerHTML = $INPUT
+    message: Direct innerHTML assignment — potential XSS
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      impact: MEDIUM
+
+  - id: python-hardcoded-secret
+    patterns:
+      - pattern: $VAR = "..."
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: (password|secret|api_key|token|auth)
+    message: Potential hardcoded secret in variable assignment
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      impact: MEDIUM
+      confidence: MEDIUM
