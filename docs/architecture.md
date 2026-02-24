@@ -25,7 +25,7 @@ Node.js ESM CLI that orchestrates linters and security scanners in parallel, out
 | `src/tools/mypy.js` | 52 | Python type checker |
 | `src/tools/typos.js` | 53 | Typo finder (opt-in) |
 | `src/tools/vulture.js` | 56 | Python dead code finder |
-| `src/tools/knip.js` | 105 | JS/TS unused code finder (opt-in) |
+| `src/tools/knip.js` | 105 | JS/TS unused code finder |
 | `defaults/ruff.toml` | 57 | Shipped ruff config |
 | `defaults/eslint.config.mjs` | 33 | Shipped eslint config |
 | `defaults/mypy.ini` | 4 | Shipped mypy config |

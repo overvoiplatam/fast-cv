@@ -6,10 +6,8 @@ A local, offline CLI tool that orchestrates multiple linters and security scanne
 
 | Tool | Languages | Tags |
 |------|-----------|------|
-| Tool | Languages | Tags |
-|------|-----------|------|
 | [ruff](https://github.com/astral-sh/ruff) | Python | `[LINTER]` `[FORMAT]` `[SECURITY]` `[REFACTOR]` `[BUG]` `[DOCS]` |
-| [eslint](https://eslint.org) + [sonarjs](https://github.com/SonarSource/eslint-plugin-sonarjs) | JS, TS, JSX, TSX | `[LINTER]` `[SECURITY]` `[REFACTOR]` `[BUG]` |
+| [eslint](https://eslint.org) + [security](https://github.com/eslint-community/eslint-plugin-security) + [sonarjs](https://github.com/SonarSource/eslint-plugin-sonarjs) | JS, TS, JSX, TSX | `[LINTER]` `[SECURITY]` `[REFACTOR]` `[BUG]` |
 | [semgrep](https://semgrep.dev) | Python, JS, TS, Go, Java, Ruby, PHP, Rust, C/C++, C#, Kotlin, Swift, Scala | `[SECURITY]` `[BUG]` (OWASP Top 10 + custom taint rules) |
 | [bearer](https://github.com/Bearer/bearer) | Python, JS, TS, Go, Java, Ruby, PHP | `[PRIVACY]` |
 | [golangci-lint](https://golangci-lint.run) | Go | `[LINTER]` `[REFACTOR]` `[BUG]` `[SECURITY]` |
@@ -18,9 +16,37 @@ A local, offline CLI tool that orchestrates multiple linters and security scanne
 | [mypy](https://mypy-lang.org) | Python | `[TYPE_ERROR]` |
 | [vulture](https://github.com/jendrikseipp/vulture) | Python | `[DEAD_CODE]` |
 | [typos](https://github.com/crate-ci/typos) | All supported languages | `[TYPO]` (opt-in) |
-| [knip](https://knip.dev) | JS, TS | `[DEAD_CODE]` (opt-in) |
+| [knip](https://knip.dev) | JS, TS | `[DEAD_CODE]` |
 
 Tools are automatically selected based on detected file types. Missing tools are skipped gracefully. Tools marked **(opt-in)** only run when explicitly requested via `--tools`.
+
+## Language Coverage
+
+What fast-cv checks per language. Columns use checkmarks for clarity; tool names shown where only one tool applies.
+
+| Language | Linting | SAST | SCA | Types | Privacy | Dead Code | Duplication | Typos\* | Secrets/IaC |
+|----------|:-------:|:----:|:---:|:-----:|:-------:|:---------:|:-----------:|:-------:|:-----------:|
+| **Python** | ruff | semgrep | trivy | mypy | bearer | vulture | jscpd | typos | trivy |
+| **JavaScript** | eslint | semgrep | trivy | — | bearer | knip | jscpd | typos | trivy |
+| **TypeScript** | eslint | semgrep | trivy | — | bearer | knip | jscpd | typos | trivy |
+| **Go** | golangci-lint | semgrep | trivy | — | bearer | — | jscpd | typos | trivy |
+| **Java** | — | semgrep | trivy | — | bearer | — | jscpd | typos | trivy |
+| **Ruby** | — | semgrep | trivy | — | bearer | — | jscpd | typos | trivy |
+| **PHP** | — | semgrep | trivy | — | bearer | — | jscpd | typos | trivy |
+| **Rust** | — | semgrep | trivy | — | — | — | jscpd | typos | trivy |
+| **C/C++** | — | semgrep | trivy | — | — | — | jscpd | typos | trivy |
+| **C#** | — | semgrep | trivy | — | — | — | jscpd | typos | trivy |
+| **Kotlin** | — | semgrep | trivy | — | — | — | jscpd | typos | trivy |
+| **Swift** | — | semgrep | trivy | — | — | — | jscpd | typos | trivy |
+| **Scala** | — | semgrep | — | — | — | — | jscpd | typos | — |
+| **SQL** | — | — | trivy | — | — | — | jscpd | typos | — |
+| **HTML** | — | — | — | — | — | — | — | — | — |
+| **CSS/SCSS** | — | — | — | — | — | — | — | — | — |
+
+\* typos is an **opt-in** tool (requires `--tools=typos`).
+
+**Best covered**: Python (8 tools), JavaScript/TypeScript (7 tools), Go (6 tools).
+**Not covered**: HTML, CSS/SCSS/SASS/LESS — fast-cv focuses on backend, infrastructure, and security. Use dedicated frontend linters (stylelint, htmlhint) for these.
 
 ## Security Architecture
 
@@ -131,8 +157,8 @@ fast-cv --tools=jscpd .
 fast-cv --tools=trivy .
 fast-cv --tools=mypy .
 fast-cv --tools=typos .         # opt-in tool: only runs when explicitly requested
-fast-cv --tools=knip .          # opt-in tool: dead code detection for JS/TS
 fast-cv --tools=vulture .       # dead code detection for Python
+fast-cv --tools=knip .          # dead code detection for JS/TS
 
 # License compliance scanning
 fast-cv --licenses .

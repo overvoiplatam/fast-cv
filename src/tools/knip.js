@@ -6,7 +6,6 @@ const execFileAsync = promisify(execFile);
 export default {
   name: 'knip',
   extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'],
-  optIn: true,  // requires package.json context — only runs when explicitly requested via --tools=knip
   installHint: 'npx knip (runs via npx, no global install needed)',
 
   buildCommand(targetDir) {

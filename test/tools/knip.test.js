@@ -12,8 +12,8 @@ describe('knip adapter', () => {
     assert.ok(knip.installHint.includes('npx'));
   });
 
-  it('is opt-in only', () => {
-    assert.equal(knip.optIn, true);
+  it('is not opt-in', () => {
+    assert.ok(!knip.optIn);
   });
 
   it('builds correct command with cwd', () => {

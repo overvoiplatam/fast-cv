@@ -44,7 +44,7 @@ export default {
 | 8 | mypy | `src/tools/mypy.js` | `.py .pyi` | TYPE_ERROR | no | no | mypy.ini |
 | 9 | typos | `src/tools/typos.js` | `.py .pyi .js .jsx .ts .tsx .go .java .rb .php .rs .c .cpp .h .cs .swift .kt .kts .sql .mts .cts .scala .sh .bash` | TYPO | **yes** | no | typos.toml |
 | 10 | vulture | `src/tools/vulture.js` | `.py .pyi` | DEAD_CODE | no | no | — |
-| 11 | knip | `src/tools/knip.js` | `.js .jsx .ts .tsx .mjs .cjs` | DEAD_CODE | **yes** | no | — |
+| 11 | knip | `src/tools/knip.js` | `.js .jsx .ts .tsx .mjs .cjs` | DEAD_CODE | no | no | — |
 
 ## Tag Reference
 

@@ -35,7 +35,7 @@ node --test --test-name-pattern="ruff" test/tools/ruff.test.js  # single tool
 | `test/tools/mypy.test.js` | 101 | Metadata, JSONL parsing, error-only filter |
 | `test/tools/typos.test.js` | 105 | Metadata, opt-in flag, JSONL parsing, corrections |
 | `test/tools/vulture.test.js` | 78 | Metadata, line-based text parsing, confidence threshold |
-| `test/tools/knip.test.js` | 142 | Metadata, opt-in flag, JSON parsing (files/exports/deps) |
+| `test/tools/knip.test.js` | 142 | Metadata, JSON parsing (files/exports/deps) |
 
 ## Contract Test Pattern
 

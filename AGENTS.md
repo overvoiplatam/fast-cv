@@ -86,7 +86,7 @@ This should always exit 0 on the main branch. Run it after any code changes.
 ### Tool not running
 
 1. Check extensions match: `tool.extensions` must include a detected language
-2. Check opt-in: typos and knip need explicit `--tools=<name>`
+2. Check opt-in: typos needs explicit `--tools=typos`
 3. Check installed: `which <binary>` or `--auto-install` flag
 4. Run with `-v` for verbose output: `node bin/fast-cv.js -v .`
 
