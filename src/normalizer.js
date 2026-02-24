@@ -1,4 +1,5 @@
 import { relative, isAbsolute } from 'node:path';
+import { collectFindings } from './findings.js';
 
 export function filterFindings(results, targetDir, ignoreFilter, onlyFilter) {
   return results.map(result => {
@@ -43,14 +44,7 @@ export function formatReport({ targetDir, results, warnings = [], fix = false })
   lines.push('');
 
   // Collect all findings, normalizing file paths to be relative
-  const allFindings = [];
-  for (const result of results) {
-    if (result.error || !result.findings) continue;
-    for (const f of result.findings) {
-      const file = isAbsolute(f.file) ? relative(targetDir, f.file) : f.file;
-      allFindings.push({ ...f, file });
-    }
-  }
+  const allFindings = collectFindings(results, targetDir);
 
   if (allFindings.length === 0 && warnings.length === 0) {
     lines.push('## No issues found');

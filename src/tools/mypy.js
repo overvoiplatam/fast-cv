@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { parseJsonLines } from '../constants.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -27,9 +28,8 @@ export default {
       return [];
     }
 
-    return stdout.trim().split('\n')
-      .map(line => { try { return JSON.parse(line); } catch { return null; } })
-      .filter(item => item && item.severity === 'error')
+    return parseJsonLines(stdout)
+      .filter(item => item.severity === 'error')
       .map(item => ({
         file: item.file,
         line: item.line || 0,

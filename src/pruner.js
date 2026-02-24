@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, extname } from 'node:path';
 import ignore from 'ignore';
+import { SCANNABLE_EXTENSIONS } from './constants.js';
 
 // Common build outputs, caches, and dependency directories that should never be scanned.
 // Sourced from GitHub's gitignore templates and major framework documentation.
@@ -79,27 +80,7 @@ const IGNORED_FILES = [
   'composer.lock',
 ];
 
-const SCANNABLE_EXTENSIONS = new Set([
-  '.py', '.pyi',
-  '.js', '.jsx', '.mjs', '.cjs',
-  '.ts', '.tsx', '.mts', '.cts',
-  '.go',
-  '.java',
-  '.rb',
-  '.php',
-  '.rs',
-  '.c', '.h', '.cpp', '.hpp',
-  '.cs',
-  '.swift',
-  '.kt', '.kts',
-  '.scala',
-  '.sh', '.bash',
-  '.yaml', '.yml',
-  '.json',
-  '.toml',
-  '.tf',
-  '.sql',
-]);
+const SCANNABLE_SET = new Set(SCANNABLE_EXTENSIONS);
 
 async function loadIgnoreFile(filePath) {
   try {
@@ -176,7 +157,7 @@ export async function pruneDirectory(targetDir, { exclude = [], only = [] } = {}
     if (ignoreFilter.ignores(relPath)) continue;
 
     const ext = extname(entry.name).toLowerCase();
-    if (!SCANNABLE_EXTENSIONS.has(ext)) continue;
+    if (!SCANNABLE_SET.has(ext)) continue;
 
     // Apply --only inclusion filter (if set, only keep matching files)
     if (onlyFilter && !onlyFilter.includes(relPath)) continue;

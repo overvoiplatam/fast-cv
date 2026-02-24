@@ -6,6 +6,17 @@ import ignore from 'ignore';
 describe('formatReport', () => {
   const targetDir = '/tmp/project';
 
+  function makeOneResult(findingOverrides = {}) {
+    return [{
+      tool: 'ruff',
+      duration: 100,
+      findings: [{
+        file: 'app.py', line: 1, tag: 'LINTER', rule: 'F401', severity: 'error', message: 'test',
+        ...findingOverrides,
+      }],
+    }];
+  }
+
   it('produces clean report when no findings', () => {
     const report = formatReport({ targetDir, results: [], warnings: [] });
     assert.ok(report.includes('# fast-cv report'));
@@ -79,14 +90,7 @@ describe('formatReport', () => {
   });
 
   it('handles absolute file paths by making them relative', () => {
-    const results = [{
-      tool: 'ruff',
-      duration: 100,
-      findings: [
-        { file: '/tmp/project/src/app.py', line: 1, tag: 'LINTER', rule: 'F401', severity: 'error', message: 'test' },
-      ],
-    }];
-
+    const results = makeOneResult({ file: '/tmp/project/src/app.py' });
     const report = formatReport({ targetDir, results, warnings: [] });
     assert.ok(report.includes('### `src/app.py`'));
     assert.ok(!report.includes('### `/tmp/project'));
@@ -118,14 +122,7 @@ describe('formatReport', () => {
   });
 
   it('handles singular forms correctly', () => {
-    const results = [{
-      tool: 'ruff',
-      duration: 100,
-      findings: [
-        { file: 'app.py', line: 1, tag: 'LINTER', rule: 'F401', severity: 'error', message: 'test' },
-      ],
-    }];
-
+    const results = makeOneResult();
     const report = formatReport({ targetDir, results, warnings: [] });
     assert.ok(report.includes('## Findings (1 issue)'));
     assert.ok(report.includes('*1 finding from 1 tool'));
@@ -175,6 +172,20 @@ describe('filterFindings', () => {
     return ig;
   }
 
+  function runFilter(ig, results, onlyFilter = undefined) {
+    return filterFindings(results, targetDir, ig, onlyFilter);
+  }
+
+  function makeTwoFindingsResults() {
+    return [{
+      tool: 'eslint',
+      findings: [
+        { file: 'src/app.js', line: 1, tag: 'LINTER', rule: 'R1', message: 'keep' },
+        { file: 'src/other.js', line: 1, tag: 'LINTER', rule: 'R2', message: 'also keep' },
+      ],
+    }];
+  }
+
   it('removes findings in ignored paths', () => {
     const ig = makeIgnore(['.svelte-kit/', 'node_modules/']);
     const results = [{
@@ -186,7 +197,7 @@ describe('filterFindings', () => {
       ],
     }];
 
-    const filtered = filterFindings(results, targetDir, ig);
+    const filtered = runFilter(ig, results);
     assert.equal(filtered[0].findings.length, 1);
     assert.equal(filtered[0].findings[0].file, 'src/app.js');
   });
@@ -201,7 +212,7 @@ describe('filterFindings', () => {
       ],
     }];
 
-    const filtered = filterFindings(results, targetDir, ig);
+    const filtered = runFilter(ig, results);
     assert.equal(filtered[0].findings.length, 1);
     assert.equal(filtered[0].findings[0].file, '/tmp/project/src/app.js');
   });
@@ -210,7 +221,7 @@ describe('filterFindings', () => {
     const ig = makeIgnore(['dist/']);
     const results = [{ tool: 'ruff', error: 'timeout', findings: [] }];
 
-    const filtered = filterFindings(results, targetDir, ig);
+    const filtered = runFilter(ig, results);
     assert.equal(filtered[0].error, 'timeout');
     assert.deepEqual(filtered[0].findings, []);
   });
@@ -219,7 +230,7 @@ describe('filterFindings', () => {
     const ig = makeIgnore(['dist/']);
     const results = [{ tool: 'ruff', findings: [] }];
 
-    const filtered = filterFindings(results, targetDir, ig);
+    const filtered = runFilter(ig, results);
     assert.deepEqual(filtered[0].findings, []);
   });
 
@@ -227,7 +238,7 @@ describe('filterFindings', () => {
     const ig = makeIgnore(['dist/']);
     const results = [{ tool: 'eslint', error: 'not found', findings: null }];
 
-    const filtered = filterFindings(results, targetDir, ig);
+    const filtered = runFilter(ig, results);
     assert.equal(filtered[0].findings, null);
   });
 
@@ -236,30 +247,16 @@ describe('filterFindings', () => {
     const onlyFilter = {
       includes(relPath) { return relPath === 'src/app.js'; },
     };
-    const results = [{
-      tool: 'eslint',
-      findings: [
-        { file: 'src/app.js', line: 1, tag: 'LINTER', rule: 'R1', message: 'keep' },
-        { file: 'src/other.js', line: 1, tag: 'LINTER', rule: 'R2', message: 'drop' },
-      ],
-    }];
-
-    const filtered = filterFindings(results, targetDir, ig, onlyFilter);
+    const results = makeTwoFindingsResults();
+    const filtered = runFilter(ig, results, onlyFilter);
     assert.equal(filtered[0].findings.length, 1);
     assert.equal(filtered[0].findings[0].file, 'src/app.js');
   });
 
   it('does not apply onlyFilter when null', () => {
     const ig = makeIgnore([]);
-    const results = [{
-      tool: 'eslint',
-      findings: [
-        { file: 'src/app.js', line: 1, tag: 'LINTER', rule: 'R1', message: 'keep' },
-        { file: 'src/other.js', line: 1, tag: 'LINTER', rule: 'R2', message: 'also keep' },
-      ],
-    }];
-
-    const filtered = filterFindings(results, targetDir, ig, null);
+    const results = makeTwoFindingsResults();
+    const filtered = runFilter(ig, results, null);
     assert.equal(filtered[0].findings.length, 2);
   });
 });

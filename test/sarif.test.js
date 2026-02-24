@@ -171,27 +171,20 @@ describe('SARIF formatter', () => {
     assert.equal(sarif.runs[0].results[0].properties.tag, 'LINTER');
   });
 
-  it('handles column in region', () => {
-    const sarif = JSON.parse(formatSarif({
-      targetDir: '/tmp/project',
-      results: makeResults([makeFinding({ col: 10 })]),
-    }));
-
-    const region = sarif.runs[0].results[0].locations[0].physicalLocation.region;
-    assert.equal(region.startLine, 42);
-    assert.equal(region.startColumn, 10);
-  });
-
-  it('omits startColumn when col is undefined', () => {
-    const sarif = JSON.parse(formatSarif({
-      targetDir: '/tmp/project',
-      results: makeResults([makeFinding({ col: undefined })]),
-    }));
-
-    const region = sarif.runs[0].results[0].locations[0].physicalLocation.region;
-    assert.equal(region.startLine, 42);
-    assert.equal(region.startColumn, undefined);
-  });
+  for (const [desc, col, expected] of [
+    ['includes startColumn when col is set', 10, 10],
+    ['omits startColumn when col is undefined', undefined, undefined],
+  ]) {
+    it(desc, () => {
+      const sarif = JSON.parse(formatSarif({
+        targetDir: '/tmp/project',
+        results: makeResults([makeFinding({ col })]),
+      }));
+      const region = sarif.runs[0].results[0].locations[0].physicalLocation.region;
+      assert.equal(region.startLine, 42);
+      assert.equal(region.startColumn, expected);
+    });
+  }
 
   it('skips error results', () => {
     const sarif = JSON.parse(formatSarif({

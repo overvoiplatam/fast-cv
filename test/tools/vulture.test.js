@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import vulture from '../../src/tools/vulture.js';
+import { testBuildCommandWithFiles } from '../helpers.js';
 
 describe('vulture adapter', () => {
   it('has correct metadata', () => {
@@ -22,10 +23,7 @@ describe('vulture adapter', () => {
   });
 
   it('builds command with files list', () => {
-    const { args } = vulture.buildCommand('/tmp/project', null, { files: ['src/a.py', 'src/b.py'] });
-    assert.ok(args.includes('src/a.py'));
-    assert.ok(args.includes('src/b.py'));
-    assert.ok(!args.includes('/tmp/project'));
+    testBuildCommandWithFiles(vulture);
   });
 
   it('parses standard vulture output', () => {

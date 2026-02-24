@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import ruff from '../../src/tools/ruff.js';
+import { testBuildCommandWithFiles } from '../helpers.js';
 
 describe('ruff adapter', () => {
   it('has correct metadata', () => {
@@ -34,10 +35,7 @@ describe('ruff adapter', () => {
   });
 
   it('builds command with files list', () => {
-    const { args } = ruff.buildCommand('/tmp/project', null, { files: ['src/a.py', 'src/b.py'] });
-    assert.ok(args.includes('src/a.py'));
-    assert.ok(args.includes('src/b.py'));
-    assert.ok(!args.includes('/tmp/project'));
+    testBuildCommandWithFiles(ruff);
   });
 
   it('returns preFixCommands for ruff format', () => {

@@ -1,4 +1,5 @@
 import { relative, isAbsolute } from 'node:path';
+import { collectFindings } from './findings.js';
 
 const TAG_LEVEL = {
   SECURITY: 'error',
@@ -26,14 +27,7 @@ export function formatSarif({ targetDir, results, warnings = [], fix = false }) 
     .map(r => ({ tool: r.tool, duration: r.duration || 0, findings: (r.findings || []).length }));
 
   // Collect all findings with normalized paths
-  const allFindings = [];
-  for (const result of results) {
-    if (result.error || !result.findings) continue;
-    for (const f of result.findings) {
-      const file = isAbsolute(f.file) ? relative(targetDir, f.file) : f.file;
-      allFindings.push({ ...f, file, sourceTool: result.tool });
-    }
-  }
+  const allFindings = collectFindings(results, targetDir, { includeSourceTool: true });
 
   // Build rules (deduplicated by ruleId)
   const ruleMap = new Map();
@@ -89,7 +83,7 @@ export function formatSarif({ targetDir, results, warnings = [], fix = false }) 
         driver: {
           name: 'fast-cv',
           version: '0.2.0',
-          informationUri: 'https://github.com/user/fast-cv',
+          informationUri: 'https://github.com/overvoiplatam/fast-cv',
           rules,
         },
       },

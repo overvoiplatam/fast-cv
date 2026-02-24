@@ -4,9 +4,9 @@ set -euo pipefail
 # fast-cv installer — idempotent, supports both git clone and curl pipe
 # Usage:
 #   From repo:  ./install.sh [--mode all|app|configs]
-#   One-liner:  curl -sfL https://raw.githubusercontent.com/<user>/fast-cv/main/install.sh | bash
+#   One-liner:  curl -sfL https://raw.githubusercontent.com/overvoiplatam/fast-cv/main/install.sh | bash
 
-REPO_URL="https://github.com/user/fast-cv.git"
+REPO_URL="https://github.com/overvoiplatam/fast-cv.git"
 INSTALL_DIR="${HOME}/.local/share/fast-cv"
 CONFIG_DIR="${HOME}/.config/fast-cv/defaults"
 LOCAL_BIN="${HOME}/.local/bin"

@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import typos from '../../src/tools/typos.js';
+import { testBuildCommandNoConfig } from '../helpers.js';
 
 describe('typos adapter', () => {
   it('has correct metadata', () => {
@@ -21,12 +22,7 @@ describe('typos adapter', () => {
   });
 
   it('builds correct command without config', () => {
-    const { bin, args } = typos.buildCommand('/tmp/project', null);
-    assert.equal(bin, 'typos');
-    assert.ok(args.includes('--format'));
-    assert.ok(args.includes('json'));
-    assert.ok(args.includes('/tmp/project'));
-    assert.ok(!args.includes('--config'));
+    testBuildCommandNoConfig(typos, 'typos');
   });
 
   it('builds correct command with config', () => {
@@ -48,12 +44,14 @@ describe('typos adapter', () => {
     ];
     const stdout = lines.join('\n');
 
+    // jscpd:ignore-start
     const findings = typos.parseOutput(stdout, '', 2);
     assert.equal(findings.length, 2);
 
     assert.equal(findings[0].file, 'src/app.py');
     assert.equal(findings[0].line, 42);
     assert.equal(findings[0].tag, 'TYPO');
+    // jscpd:ignore-end
     assert.equal(findings[0].rule, 'typo');
     assert.equal(findings[0].severity, 'warning');
     assert.ok(findings[0].message.includes('"teh"'));

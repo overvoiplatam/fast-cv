@@ -43,7 +43,7 @@ fast-cv implements a five-pillar security model that provides bank-grade coverag
 
 ```bash
 # Clone and install
-git clone https://github.com/<user>/fast-cv.git
+git clone https://github.com/overvoiplatam/fast-cv.git
 cd fast-cv
 ./install.sh
 ```

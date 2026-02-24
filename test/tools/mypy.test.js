@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import mypy from '../../src/tools/mypy.js';
+import { testBuildCommandWithFiles } from '../helpers.js';
 
 describe('mypy adapter', () => {
   it('has correct metadata', () => {
@@ -26,10 +27,7 @@ describe('mypy adapter', () => {
   });
 
   it('builds command with files list', () => {
-    const { args } = mypy.buildCommand('/tmp/project', null, { files: ['src/a.py', 'src/b.py'] });
-    assert.ok(args.includes('src/a.py'));
-    assert.ok(args.includes('src/b.py'));
-    assert.ok(!args.includes('/tmp/project'));
+    testBuildCommandWithFiles(mypy);
   });
 
   it('parses JSON Lines output', () => {

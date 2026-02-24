@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { SCANNABLE_EXTENSIONS } from '../constants.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -19,17 +20,7 @@ function getTmpDir() {
 export default {
   name: 'jscpd',
   // Cross-language: runs on all scannable extensions
-  extensions: [
-    '.py', '.pyi',
-    '.js', '.jsx', '.mjs', '.cjs',
-    '.ts', '.tsx', '.mts', '.cts',
-    '.go', '.java', '.rb', '.php', '.rs',
-    '.c', '.h', '.cpp', '.hpp', '.cs',
-    '.swift', '.kt', '.kts', '.scala',
-    '.sh', '.bash',
-    '.yaml', '.yml', '.json', '.toml',
-    '.tf', '.sql',
-  ],
+  extensions: [...SCANNABLE_EXTENSIONS],
   installHint: 'npm install -g jscpd',
 
   buildCommand(targetDir, configPath, { files = [] } = {}) {

@@ -67,31 +67,16 @@ describe('bearer adapter', () => {
     );
   });
 
-  it('handles critical severity', () => {
-    const stdout = JSON.stringify({
-      warnings: [{
-        rule_id: 'test',
-        severity: 'critical',
-        title: 'Critical issue',
-        filename: 'f.py',
-        locations: [{ filename: 'f.py', line_number: 1 }],
-      }],
+  for (const [inputSev, expectedSev] of [['critical', 'error'], ['low', 'warning']]) {
+    it(`maps "${inputSev}" severity to "${expectedSev}"`, () => {
+      const stdout = JSON.stringify({
+        warnings: [{
+          rule_id: 'test', severity: inputSev, title: 'test issue',
+          filename: 'f.py', locations: [{ filename: 'f.py', line_number: 1 }],
+        }],
+      });
+      const findings = bearer.parseOutput(stdout, '', 1);
+      assert.equal(findings[0].severity, expectedSev);
     });
-    const findings = bearer.parseOutput(stdout, '', 1);
-    assert.equal(findings[0].severity, 'error');
-  });
-
-  it('handles low severity', () => {
-    const stdout = JSON.stringify({
-      warnings: [{
-        rule_id: 'test',
-        severity: 'low',
-        title: 'Minor issue',
-        filename: 'f.py',
-        locations: [{ filename: 'f.py', line_number: 1 }],
-      }],
-    });
-    const findings = bearer.parseOutput(stdout, '', 1);
-    assert.equal(findings[0].severity, 'warning');
-  });
+  }
 });

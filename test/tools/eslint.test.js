@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import eslint from '../../src/tools/eslint.js';
+import { testBuildCommandNoConfig } from '../helpers.js';
 
 describe('eslint adapter', () => {
   it('has correct metadata', () => {
@@ -11,12 +12,7 @@ describe('eslint adapter', () => {
   });
 
   it('builds command without config', () => {
-    const { bin, args } = eslint.buildCommand('/tmp/project', null);
-    assert.equal(bin, 'eslint');
-    assert.ok(args.includes('--format'));
-    assert.ok(args.includes('json'));
-    assert.ok(args.includes('/tmp/project'));
-    assert.ok(!args.includes('--config'));
+    testBuildCommandNoConfig(eslint, 'eslint');
   });
 
   it('builds command with config', () => {
