@@ -2,28 +2,70 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, extname } from 'node:path';
 import ignore from 'ignore';
 
+// Common build outputs, caches, and dependency directories that should never be scanned.
+// Sourced from GitHub's gitignore templates and major framework documentation.
 const HARDCODED_IGNORES = [
+  // Package managers / dependencies
   'node_modules',
+  'bower_components',
+  'jspm_packages',
+  'vendor',
+  '.yarn',
+  '.pnp',
+
+  // Python
   '__pycache__',
   '.venv',
   'venv',
-  '.git',
-  '.hg',
-  '.svn',
-  'dist',
-  'build',
-  'coverage',
   '.tox',
   '.mypy_cache',
   '.pytest_cache',
   '.ruff_cache',
+  '.egg-info',
+
+  // Version control
+  '.git',
+  '.hg',
+  '.svn',
+
+  // Generic build / dist
+  'dist',
+  'build',
+  'out',
+  'target',
+  '_build',
+
+  // JavaScript frameworks
   '.next',
   '.nuxt',
-  '.output',
+  '.svelte-kit',
+  '.angular',
+  '.astro',
+  '.docusaurus',
+  '.vite',
+  '.parcel-cache',
+  '.turbo',
+  '.expo',
+
+  // Hosting / deploy
+  '.vercel',
+  '.netlify',
+  '.serverless',
+
+  // IDE / editors
+  '.idea',
+  '.vscode',
+
+  // Build tools / caches
+  '.gradle',
+  '.cargo',
+  '.sass-cache',
   '.cache',
-  'vendor',
+  '.output',
+  'coverage',
+
+  // IaC
   '.terraform',
-  '.egg-info',
 ];
 
 const IGNORED_FILES = [
@@ -68,12 +110,15 @@ async function loadIgnoreFile(filePath) {
   }
 }
 
-export async function pruneDirectory(targetDir) {
+export async function createIgnoreFilter(targetDir, { exclude = [] } = {}) {
   const ig = ignore();
 
   // Add hardcoded directory ignores
   ig.add(HARDCODED_IGNORES.map(d => `${d}/`));
   ig.add(IGNORED_FILES);
+
+  // Add user-supplied --exclude patterns
+  if (exclude.length > 0) ig.add(exclude);
 
   // Load .gitignore
   const gitignorePatterns = await loadIgnoreFile(join(targetDir, '.gitignore'));
@@ -82,6 +127,12 @@ export async function pruneDirectory(targetDir) {
   // Load .fcvignore
   const fcvignorePatterns = await loadIgnoreFile(join(targetDir, '.fcvignore'));
   if (fcvignorePatterns.length > 0) ig.add(fcvignorePatterns);
+
+  return ig;
+}
+
+export async function pruneDirectory(targetDir, { exclude = [] } = {}) {
+  const ignoreFilter = await createIgnoreFilter(targetDir, { exclude });
 
   // Walk directory
   const entries = await readdir(targetDir, { recursive: true, withFileTypes: true });
@@ -95,7 +146,7 @@ export async function pruneDirectory(targetDir) {
     const relPath = relative(targetDir, fullPath);
 
     // Apply ignore rules
-    if (ig.ignores(relPath)) continue;
+    if (ignoreFilter.ignores(relPath)) continue;
 
     const ext = extname(entry.name).toLowerCase();
     if (!SCANNABLE_EXTENSIONS.has(ext)) continue;
@@ -105,5 +156,5 @@ export async function pruneDirectory(targetDir) {
   }
 
   files.sort();
-  return { files, languages };
+  return { files, languages, ignoreFilter };
 }

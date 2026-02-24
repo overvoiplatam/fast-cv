@@ -1,5 +1,18 @@
 import { relative, isAbsolute } from 'node:path';
 
+export function filterFindings(results, targetDir, ignoreFilter) {
+  return results.map(result => {
+    if (result.error || !result.findings || result.findings.length === 0) return result;
+
+    const filtered = result.findings.filter(f => {
+      const relPath = isAbsolute(f.file) ? relative(targetDir, f.file) : f.file;
+      return !ignoreFilter.ignores(relPath);
+    });
+
+    return { ...result, findings: filtered };
+  });
+}
+
 export function formatReport({ targetDir, results, warnings = [] }) {
   const lines = [];
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');

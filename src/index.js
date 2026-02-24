@@ -5,7 +5,7 @@ import { pruneDirectory } from './pruner.js';
 import { precheck } from './precheck.js';
 import { resolveConfig } from './config-resolver.js';
 import { runTools } from './runner.js';
-import { formatReport } from './normalizer.js';
+import { formatReport, filterFindings } from './normalizer.js';
 import { tools as allTools } from './tools/index.js';
 
 const EXIT_CLEAN = 0;
@@ -24,6 +24,7 @@ export async function run(argv) {
     .option('--tools <names>', 'comma-separated list of tools to run (default: all applicable)')
     .option('-v, --verbose', 'show detailed output on stderr', false)
     .option('--auto-install', 'automatically install missing tools', false)
+    .option('-x, --exclude <patterns>', 'comma-separated ignore patterns (gitignore syntax)', '')
     .action(async (directory, options) => {
       const targetDir = resolve(directory);
 
@@ -36,10 +37,13 @@ export async function run(argv) {
 
       const timeout = parseInt(options.timeout, 10) * 1000;
       const verbose = options.verbose;
+      const exclude = options.exclude
+        ? options.exclude.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
 
       // Step 1: Prune directory
       if (verbose) process.stderr.write(`Scanning ${targetDir}...\n`);
-      const { files, languages } = await pruneDirectory(targetDir);
+      const { files, languages, ignoreFilter } = await pruneDirectory(targetDir, { exclude });
       if (verbose) process.stderr.write(`Found ${files.length} files, languages: ${[...languages].join(', ')}\n`);
 
       if (files.length === 0) {
@@ -83,12 +87,15 @@ export async function run(argv) {
       if (verbose) process.stderr.write(`Running ${readyTools.map(t => t.name).join(', ')}...\n`);
       const results = await runTools(toolConfigs, targetDir, { timeout, verbose });
 
-      // Step 6: Format and output report
+      // Step 6: Post-filter findings through ignore rules
+      const filtered = filterFindings(results, targetDir, ignoreFilter);
+
+      // Step 7: Format and output report
       const warnings = precheckResult.warnings || [];
-      const report = formatReport({ targetDir, results, warnings });
+      const report = formatReport({ targetDir, results: filtered, warnings });
       process.stdout.write(report);
 
-      const hasFindings = results.some(r => r.findings && r.findings.length > 0);
+      const hasFindings = filtered.some(r => r.findings && r.findings.length > 0);
       process.exit(hasFindings ? EXIT_FINDINGS : EXIT_CLEAN);
     });
 

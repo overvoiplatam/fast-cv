@@ -120,4 +120,24 @@ describe('runTools', () => {
     assert.ok(results[0].error);
     assert.ok(results[0].error.includes('Timeout'));
   });
+
+  it('passes cwd from buildCommand to spawn', async () => {
+    const mockTool = {
+      name: 'cwd-tool',
+      buildCommand() { return { bin: 'pwd', args: [], cwd: '/tmp' }; },
+      parseOutput(stdout) {
+        return [{ file: 'test.py', line: 1, tag: 'LINTER', rule: 'T', severity: 'warning', message: stdout.trim() }];
+      },
+    };
+
+    const results = await runTools(
+      [{ tool: mockTool, config: { path: null, source: 'none' } }],
+      '/some/other/dir',
+      { timeout: 5000 }
+    );
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].error, null);
+    assert.equal(results[0].findings[0].message, '/tmp');
+  });
 });

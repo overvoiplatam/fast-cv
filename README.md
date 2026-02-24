@@ -56,6 +56,7 @@ fast-cv [directory] [options]
 |------|-------------|---------|
 | `-t, --timeout <seconds>` | Per-tool timeout | `120` |
 | `--tools <names>` | Comma-separated tool list | all applicable |
+| `-x, --exclude <patterns>` | Comma-separated ignore patterns (gitignore syntax); filters both file discovery and tool findings | none |
 | `-v, --verbose` | Show detailed output on stderr | `false` |
 | `--auto-install` | Auto-install missing tools | `false` |
 
@@ -76,6 +77,10 @@ fast-cv . --auto-install
 
 # 30-second timeout per tool, verbose
 fast-cv . --timeout 30 -v
+
+# Exclude extra directories/files (gitignore pattern syntax)
+fast-cv . --exclude ".svelte-kit/,config.js,**/generated/"
+fast-cv . -x "storybook-static/,*.config.js"
 ```
 
 ## Output Format
@@ -127,7 +132,19 @@ fast-cv resolves configs with a fallback chain (first match wins):
 
 ### Ignoring Files
 
-fast-cv respects `.gitignore` and also supports `.fcvignore` for project-specific overrides. Common directories (`node_modules`, `__pycache__`, `.venv`, `dist`, `build`, etc.) and lock files are always ignored.
+fast-cv applies ignore rules at **two levels**:
+
+1. **File discovery** — ignored paths are excluded from language detection and file counting.
+2. **Finding post-filter** — findings reported by tools (which scan the full directory independently) are filtered through the same ignore rules before the report is generated.
+
+This means `.svelte-kit/`, `node_modules/`, `dist/`, and other build artifacts are stripped from the report even when a tool scans them internally.
+
+Ignore sources (merged together, first match wins):
+
+- **Hardcoded**: `node_modules`, `__pycache__`, `.venv`, `dist`, `build`, `.svelte-kit`, `.next`, `.nuxt`, and [many more](src/pruner.js) common build/cache directories, plus lock files (`package-lock.json`, `yarn.lock`, etc.)
+- **`.gitignore`**: Patterns from the target directory's `.gitignore`
+- **`.fcvignore`**: Project-specific overrides (same syntax as `.gitignore`)
+- **`--exclude`**: CLI flag for ad-hoc patterns (e.g., `-x "admin/captive/,*.config.js"`)
 
 ## Development
 

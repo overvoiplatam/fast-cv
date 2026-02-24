@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { pruneDirectory } from '../src/pruner.js';
+import { pruneDirectory, createIgnoreFilter } from '../src/pruner.js';
 
 describe('pruneDirectory', () => {
   let tmpDir;
@@ -87,6 +87,45 @@ describe('pruneDirectory', () => {
     assert.ok(!files.some(f => f.includes('generated')));
   });
 
+  it('ignores .svelte-kit and other framework build dirs', async () => {
+    for (const dir of ['.svelte-kit', '.angular', '.turbo', '.expo', '.astro']) {
+      await mkdir(join(tmpDir, dir), { recursive: true });
+      await writeFile(join(tmpDir, dir, 'generated.js'), '');
+    }
+
+    const { files } = await pruneDirectory(tmpDir);
+
+    for (const dir of ['.svelte-kit', '.angular', '.turbo', '.expo', '.astro']) {
+      assert.ok(!files.some(f => f.includes(dir)), `${dir} should be ignored`);
+    }
+  });
+
+  it('applies --exclude patterns', async () => {
+    await mkdir(join(tmpDir, 'custom-build'), { recursive: true });
+    await writeFile(join(tmpDir, 'custom-build', 'output.js'), '');
+    await writeFile(join(tmpDir, 'config.js'), 'export default {}');
+
+    const { files } = await pruneDirectory(tmpDir, {
+      exclude: ['custom-build/', 'config.js'],
+    });
+
+    assert.ok(!files.some(f => f.includes('custom-build')));
+    assert.ok(!files.includes('config.js'));
+  });
+
+  it('--exclude works with glob patterns', async () => {
+    await mkdir(join(tmpDir, 'src', 'gen'), { recursive: true });
+    await writeFile(join(tmpDir, 'src', 'gen', 'api.ts'), '');
+    await writeFile(join(tmpDir, 'src', 'app.ts'), '');
+
+    const { files } = await pruneDirectory(tmpDir, {
+      exclude: ['**/gen/'],
+    });
+
+    assert.ok(!files.some(f => f.includes('gen')));
+    assert.ok(files.some(f => f.includes('app.ts')));
+  });
+
   it('returns sorted file list', async () => {
     const { files } = await pruneDirectory(tmpDir);
     const sorted = [...files].sort();
@@ -99,5 +138,61 @@ describe('pruneDirectory', () => {
 
     const { files } = await pruneDirectory(tmpDir);
     assert.ok(files.includes(join('src', 'utils', 'helper.py')));
+  });
+
+  it('returns ignoreFilter from pruneDirectory', async () => {
+    const { ignoreFilter } = await pruneDirectory(tmpDir);
+    assert.ok(ignoreFilter);
+    assert.ok(typeof ignoreFilter.ignores === 'function');
+  });
+});
+
+describe('createIgnoreFilter', () => {
+  let tmpDir;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'fcv-filter-'));
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('ignores hardcoded directories', async () => {
+    const ig = await createIgnoreFilter(tmpDir);
+    assert.ok(ig.ignores('node_modules/dep.js'));
+    assert.ok(ig.ignores('.svelte-kit/generated/client.js'));
+    assert.ok(ig.ignores('__pycache__/cache.py'));
+    assert.ok(ig.ignores('dist/bundle.js'));
+  });
+
+  it('ignores lock files', async () => {
+    const ig = await createIgnoreFilter(tmpDir);
+    assert.ok(ig.ignores('package-lock.json'));
+    assert.ok(ig.ignores('yarn.lock'));
+  });
+
+  it('does not ignore normal source files', async () => {
+    const ig = await createIgnoreFilter(tmpDir);
+    assert.ok(!ig.ignores('src/app.js'));
+    assert.ok(!ig.ignores('main.py'));
+  });
+
+  it('applies --exclude patterns', async () => {
+    const ig = await createIgnoreFilter(tmpDir, { exclude: ['admin/captive/'] });
+    assert.ok(ig.ignores('admin/captive/index.js'));
+    assert.ok(!ig.ignores('admin/main.js'));
+  });
+
+  it('loads .gitignore patterns', async () => {
+    await writeFile(join(tmpDir, '.gitignore'), 'custom-build/\n');
+    const ig = await createIgnoreFilter(tmpDir);
+    assert.ok(ig.ignores('custom-build/output.js'));
+  });
+
+  it('loads .fcvignore patterns', async () => {
+    await writeFile(join(tmpDir, '.fcvignore'), 'generated/\n');
+    const ig = await createIgnoreFilter(tmpDir);
+    assert.ok(ig.ignores('generated/auto.js'));
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatReport } from '../src/normalizer.js';
+import { formatReport, filterFindings } from '../src/normalizer.js';
+import ignore from 'ignore';
 
 describe('formatReport', () => {
   const targetDir = '/tmp/project';
@@ -139,5 +140,71 @@ describe('formatReport', () => {
     const report = formatReport({ targetDir, results, warnings: [] });
     assert.ok(report.includes('ruff'));
     assert.ok(!report.includes('**Tools**: ruff (0.4s), eslint'));
+  });
+});
+
+describe('filterFindings', () => {
+  const targetDir = '/tmp/project';
+
+  function makeIgnore(patterns) {
+    const ig = ignore();
+    ig.add(patterns);
+    return ig;
+  }
+
+  it('removes findings in ignored paths', () => {
+    const ig = makeIgnore(['.svelte-kit/', 'node_modules/']);
+    const results = [{
+      tool: 'eslint',
+      findings: [
+        { file: '.svelte-kit/generated/client.js', line: 1, tag: 'LINTER', rule: 'no-eval', message: 'bad' },
+        { file: 'src/app.js', line: 5, tag: 'LINTER', rule: 'no-eval', message: 'also bad' },
+        { file: 'node_modules/dep/index.js', line: 1, tag: 'LINTER', rule: 'no-eval', message: 'dep bad' },
+      ],
+    }];
+
+    const filtered = filterFindings(results, targetDir, ig);
+    assert.equal(filtered[0].findings.length, 1);
+    assert.equal(filtered[0].findings[0].file, 'src/app.js');
+  });
+
+  it('handles absolute file paths', () => {
+    const ig = makeIgnore(['dist/']);
+    const results = [{
+      tool: 'eslint',
+      findings: [
+        { file: '/tmp/project/dist/bundle.js', line: 1, tag: 'LINTER', rule: 'R1', message: 'test' },
+        { file: '/tmp/project/src/app.js', line: 1, tag: 'LINTER', rule: 'R1', message: 'test' },
+      ],
+    }];
+
+    const filtered = filterFindings(results, targetDir, ig);
+    assert.equal(filtered[0].findings.length, 1);
+    assert.equal(filtered[0].findings[0].file, '/tmp/project/src/app.js');
+  });
+
+  it('passes through results with errors unchanged', () => {
+    const ig = makeIgnore(['dist/']);
+    const results = [{ tool: 'ruff', error: 'timeout', findings: [] }];
+
+    const filtered = filterFindings(results, targetDir, ig);
+    assert.equal(filtered[0].error, 'timeout');
+    assert.deepEqual(filtered[0].findings, []);
+  });
+
+  it('passes through results with no findings', () => {
+    const ig = makeIgnore(['dist/']);
+    const results = [{ tool: 'ruff', findings: [] }];
+
+    const filtered = filterFindings(results, targetDir, ig);
+    assert.deepEqual(filtered[0].findings, []);
+  });
+
+  it('passes through results with null findings', () => {
+    const ig = makeIgnore(['dist/']);
+    const results = [{ tool: 'eslint', error: 'not found', findings: null }];
+
+    const filtered = filterFindings(results, targetDir, ig);
+    assert.equal(filtered[0].findings, null);
   });
 });

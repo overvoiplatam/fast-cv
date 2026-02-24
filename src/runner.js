@@ -3,13 +3,14 @@ import { spawn } from 'node:child_process';
 function runSingleTool(tool, configPath, targetDir, timeout) {
   return new Promise((resolve) => {
     const start = Date.now();
-    const { bin, args } = tool.buildCommand(targetDir, configPath);
+    const { bin, args, cwd } = tool.buildCommand(targetDir, configPath);
 
     let stdout = '';
     let stderr = '';
     let killed = false;
 
     const proc = spawn(bin, args, {
+      cwd,
       env: { ...process.env, NO_COLOR: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 0, // We handle timeout ourselves
