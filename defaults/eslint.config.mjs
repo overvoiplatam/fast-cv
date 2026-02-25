@@ -1,5 +1,3 @@
-import sonarjs from "eslint-plugin-sonarjs";
-
 // Resilient dynamic import — returns default export (with CJS interop) or null
 async function tryImport(specifier) {
   try {
@@ -10,7 +8,8 @@ async function tryImport(specifier) {
   }
 }
 
-// ─── Load optional plugins (graceful degradation if not installed) ───
+// ─── Load all plugins resiliently (graceful degradation if not installed) ───
+const sonarjs = await tryImport("eslint-plugin-sonarjs");
 const security = await tryImport("eslint-plugin-security");
 const tseslint = await tryImport("typescript-eslint");
 const react = await tryImport("eslint-plugin-react");
@@ -21,12 +20,12 @@ const jsonc = await tryImport("eslint-plugin-jsonc");
 
 const config = [
   // ─── sonarjs recommended (JS + TS) ─────────────────────────────────
-  sonarjs.configs.recommended,
+  ...(sonarjs?.configs?.recommended ? [sonarjs.configs.recommended] : []),
 
   // ─── Base rules (JS + TS) ──────────────────────────────────────────
   {
     files: ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
-    plugins: { sonarjs },
+    ...(sonarjs ? { plugins: { sonarjs } } : {}),
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -45,11 +44,13 @@ const config = [
       "max-depth": ["warn", 4],
       "max-lines-per-function": ["warn", { "max": 50, "skipBlankLines": true, "skipComments": true }],
       "max-nested-callbacks": ["warn", 3],
-      // sonarjs overrides
-      "sonarjs/cognitive-complexity": ["warn", 15],
-      "sonarjs/no-duplicate-string": ["warn", 3],
-      "sonarjs/max-switch-cases": ["warn", 10],
-      "sonarjs/no-identical-functions": "warn",
+      // sonarjs overrides (only active if plugin loaded)
+      ...(sonarjs ? {
+        "sonarjs/cognitive-complexity": ["warn", 15],
+        "sonarjs/no-duplicate-string": ["warn", 3],
+        "sonarjs/max-switch-cases": ["warn", 10],
+        "sonarjs/no-identical-functions": "warn",
+      } : {}),
     },
   },
 

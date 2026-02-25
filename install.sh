@@ -216,20 +216,22 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
     install_python_tool semgrep && ok "semgrep installed" || warn "Failed to install semgrep"
   fi
 
-  # eslint (Node — global install with sudo fallback)
+  # eslint + plugins (Node — global install with sudo fallback)
   if command -v eslint &>/dev/null; then
     ok "eslint already installed: $(eslint --version)"
   else
-    info "Installing eslint + plugins (security, sonarjs, typescript, react, vue, svelte, json)..."
-    install_npm_global eslint eslint-plugin-security eslint-plugin-sonarjs \
-      typescript-eslint \
-      eslint-plugin-react eslint-plugin-react-hooks \
-      eslint-plugin-vue \
-      eslint-plugin-svelte \
-      eslint-plugin-jsonc \
-      && ok "eslint + plugins installed" \
+    info "Installing eslint..."
+    install_npm_global eslint \
+      && ok "eslint installed" \
       || warn "Failed to install eslint"
   fi
+
+  # eslint plugins — always ensure they're installed (even if eslint was already present)
+  ESLINT_PLUGINS="eslint-plugin-sonarjs eslint-plugin-security typescript-eslint eslint-plugin-react eslint-plugin-react-hooks eslint-plugin-vue eslint-plugin-svelte eslint-plugin-jsonc"
+  info "Ensuring eslint plugins are installed..."
+  install_npm_global ${ESLINT_PLUGINS} \
+    && ok "eslint plugins installed" \
+    || warn "Failed to install some eslint plugins (eslint will degrade gracefully)"
 
   # jscpd (Node — code duplication detector)
   if command -v jscpd &>/dev/null; then
