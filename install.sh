@@ -220,9 +220,14 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
   if command -v eslint &>/dev/null; then
     ok "eslint already installed: $(eslint --version)"
   else
-    info "Installing eslint + eslint-plugin-security + eslint-plugin-sonarjs..."
+    info "Installing eslint + plugins (security, sonarjs, typescript, react, vue, svelte, json)..."
     install_npm_global eslint eslint-plugin-security eslint-plugin-sonarjs \
-      && ok "eslint installed" \
+      typescript-eslint \
+      eslint-plugin-react eslint-plugin-react-hooks \
+      eslint-plugin-vue \
+      eslint-plugin-svelte \
+      eslint-plugin-jsonc \
+      && ok "eslint + plugins installed" \
       || warn "Failed to install eslint"
   fi
 

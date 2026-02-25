@@ -8,6 +8,12 @@ describe('eslint adapter', () => {
     assert.equal(eslint.name, 'eslint');
     assert.ok(eslint.extensions.includes('.js'));
     assert.ok(eslint.extensions.includes('.ts'));
+    assert.ok(eslint.extensions.includes('.mts'));
+    assert.ok(eslint.extensions.includes('.cts'));
+    assert.ok(eslint.extensions.includes('.svelte'));
+    assert.ok(eslint.extensions.includes('.vue'));
+    assert.ok(eslint.extensions.includes('.json'));
+    assert.ok(eslint.extensions.includes('.jsonc'));
     assert.ok(eslint.installHint.includes('eslint'));
   });
 
@@ -27,7 +33,8 @@ describe('eslint adapter', () => {
   });
 
   it('builds command with files list', () => {
-    const { args } = eslint.buildCommand('/tmp/project', null, { files: ['src/a.js', 'src/b.ts'] });
+    const { args, cwd } = eslint.buildCommand('/tmp/project', null, { files: ['src/a.js', 'src/b.ts'] });
+    assert.equal(cwd, '/tmp/project');
     assert.ok(args.includes('src/a.js'));
     assert.ok(args.includes('src/b.ts'));
     assert.ok(!args.includes('/tmp/project'));
@@ -125,5 +132,25 @@ describe('eslint adapter', () => {
     }]);
     const findings = eslint.parseOutput(stdout, '', 1);
     assert.equal(findings[0].rule, 'parse-error');
+  });
+
+  it('filters out "no matching configuration" messages from ESLint v9', () => {
+    const stdout = JSON.stringify([
+      {
+        filePath: '/tmp/project/src/styles/variables.scss',
+        messages: [{ severity: 1, message: 'File ignored because no matching configuration was supplied.', line: 0, column: 0 }],
+      },
+      {
+        filePath: '/tmp/project/tsconfig.json',
+        messages: [{ severity: 1, message: 'File ignored because no matching configuration was supplied.', line: 0, column: 0 }],
+      },
+      {
+        filePath: '/tmp/project/src/app.js',
+        messages: [{ ruleId: 'no-eval', severity: 2, message: 'eval can be harmful', line: 5, column: 1 }],
+      },
+    ]);
+    const findings = eslint.parseOutput(stdout, '', 1);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].rule, 'no-eval');
   });
 });

@@ -25,7 +25,7 @@ export default {
     } else {
       args.push(targetDir + '/**/*.{css,scss,sass,less}');
     }
-    return { bin: 'stylelint', args };
+    return { bin: 'stylelint', args, cwd: targetDir };
   },
 
   parseOutput(stdout, stderr, exitCode) {

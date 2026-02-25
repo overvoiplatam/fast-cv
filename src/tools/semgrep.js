@@ -30,7 +30,7 @@ export default {
     } else {
       args.push(targetDir);
     }
-    return { bin: 'semgrep', args };
+    return { bin: 'semgrep', args, cwd: targetDir };
   },
 
   parseOutput(stdout, stderr, exitCode) {

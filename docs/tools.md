@@ -35,7 +35,7 @@ export default {
 | # | Name | File | Extensions | Tags | Opt-In | Fix | Config |
 |---|------|------|------------|------|--------|-----|--------|
 | 1 | ruff | `src/tools/ruff.js` | `.py .pyi` | LINTER REFACTOR FORMAT DOCS BUG SECURITY | no | yes | ruff.toml |
-| 2 | eslint | `src/tools/eslint.js` | `.js .jsx .ts .tsx .mjs .cjs` | LINTER SECURITY REFACTOR BUG | no | yes | eslint.config.mjs |
+| 2 | eslint | `src/tools/eslint.js` | `.js .jsx .ts .tsx .mjs .cjs .mts .cts .svelte .vue .json .jsonc` | LINTER SECURITY REFACTOR BUG | no | yes | eslint.config.mjs |
 | 3 | semgrep | `src/tools/semgrep.js` | `.py .js .jsx .ts .tsx .go .java .rb .php .rs .c .h .cpp .hpp .cs .kt .kts .swift .scala` | SECURITY BUG | no | no | semgrep/ (dir) |
 | 4 | bearer | `src/tools/bearer.js` | `.py .js .jsx .ts .tsx .go .java .rb .php` | PRIVACY | no | no | .bearer.yml |
 | 5 | golangci-lint | `src/tools/golangci-lint.js` | `.go` | LINTER REFACTOR BUG SECURITY | no | yes | .golangci.yml |

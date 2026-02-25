@@ -31,6 +31,13 @@ describe('golangci-lint adapter', () => {
     assert.ok(args.includes('--fix'));
   });
 
+  it('uses file paths instead of ./... when files provided', () => {
+    const { args } = golangciLint.buildCommand('/tmp/project', null, { files: ['main.go', 'pkg/util.go'] });
+    assert.ok(args.includes('main.go'));
+    assert.ok(args.includes('pkg/util.go'));
+    assert.ok(!args.includes('./...'));
+  });
+
   it('parses JSON output with issues', () => {
     const stdout = JSON.stringify({
       Issues: [

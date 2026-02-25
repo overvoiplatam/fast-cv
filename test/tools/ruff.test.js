@@ -11,8 +11,9 @@ describe('ruff adapter', () => {
   });
 
   it('builds correct command without config', () => {
-    const { bin, args } = ruff.buildCommand('/tmp/project', null);
+    const { bin, args, cwd } = ruff.buildCommand('/tmp/project', null);
     assert.equal(bin, 'ruff');
+    assert.equal(cwd, '/tmp/project');
     assert.ok(args.includes('check'));
     assert.ok(args.includes('--output-format'));
     assert.ok(args.includes('json'));
@@ -42,12 +43,14 @@ describe('ruff adapter', () => {
     const cmds = ruff.preFixCommands('/tmp/project', null, { files: [] });
     assert.equal(cmds.length, 1);
     assert.equal(cmds[0].bin, 'ruff');
+    assert.equal(cmds[0].cwd, '/tmp/project');
     assert.ok(cmds[0].args.includes('format'));
     assert.ok(cmds[0].args.includes('/tmp/project'));
   });
 
   it('preFixCommands uses files when provided', () => {
     const cmds = ruff.preFixCommands('/tmp/project', '/etc/ruff.toml', { files: ['a.py'] });
+    assert.equal(cmds[0].cwd, '/tmp/project');
     assert.ok(cmds[0].args.includes('a.py'));
     assert.ok(!cmds[0].args.includes('/tmp/project'));
     assert.ok(cmds[0].args.includes('--config'));

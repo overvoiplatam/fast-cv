@@ -18,7 +18,7 @@ export default {
     } else {
       args.push(targetDir);
     }
-    return { bin: 'typos', args };
+    return { bin: 'typos', args, cwd: targetDir };
   },
 
   parseOutput(stdout, stderr, exitCode) {

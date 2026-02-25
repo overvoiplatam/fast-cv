@@ -17,7 +17,7 @@ export default {
     } else {
       args.push(targetDir);
     }
-    return { bin: 'mypy', args };
+    return { bin: 'mypy', args, cwd: targetDir };
   },
 
   parseOutput(stdout, stderr, exitCode) {

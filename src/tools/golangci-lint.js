@@ -36,7 +36,11 @@ export default {
       args.push('--enable', 'gocognit,gocritic');
     }
     if (fix) args.push('--fix');
-    args.push('./...');
+    if (files.length > 0) {
+      args.push(...files);
+    } else {
+      args.push('./...');
+    }
     return { bin: 'golangci-lint', args, cwd: targetDir };
   },
 

@@ -24,7 +24,7 @@ export default {
     } else {
       args.push(targetDir);
     }
-    return { bin: 'sqlfluff', args };
+    return { bin: 'sqlfluff', args, cwd: targetDir };
   },
 
   parseOutput(stdout, stderr, exitCode) {

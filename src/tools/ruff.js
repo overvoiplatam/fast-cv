@@ -41,7 +41,7 @@ export default {
     } else {
       args.push(targetDir);
     }
-    return { bin: 'ruff', args };
+    return { bin: 'ruff', args, cwd: targetDir };
   },
 
   preFixCommands(targetDir, configPath, { files = [] } = {}) {
@@ -54,7 +54,7 @@ export default {
     } else {
       args.push(targetDir);
     }
-    return [{ bin: 'ruff', args }];
+    return [{ bin: 'ruff', args, cwd: targetDir }];
   },
 
   parseOutput(stdout, stderr, exitCode) {

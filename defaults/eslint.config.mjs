@@ -1,9 +1,31 @@
 import sonarjs from "eslint-plugin-sonarjs";
 
-export default [
+// Resilient dynamic import — returns default export (with CJS interop) or null
+async function tryImport(specifier) {
+  try {
+    const mod = await import(specifier);
+    return mod.default ?? mod;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Load optional plugins (graceful degradation if not installed) ───
+const security = await tryImport("eslint-plugin-security");
+const tseslint = await tryImport("typescript-eslint");
+const react = await tryImport("eslint-plugin-react");
+const reactHooks = await tryImport("eslint-plugin-react-hooks");
+const vue = await tryImport("eslint-plugin-vue");
+const svelte = await tryImport("eslint-plugin-svelte");
+const jsonc = await tryImport("eslint-plugin-jsonc");
+
+const config = [
+  // ─── sonarjs recommended (JS + TS) ─────────────────────────────────
   sonarjs.configs.recommended,
+
+  // ─── Base rules (JS + TS) ──────────────────────────────────────────
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx"],
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
     plugins: { sonarjs },
     languageOptions: {
       ecmaVersion: "latest",
@@ -30,4 +52,62 @@ export default [
       "sonarjs/no-identical-functions": "warn",
     },
   },
+
+  // ─── eslint-plugin-security ────────────────────────────────────────
+  ...(security ? [{
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+    plugins: { security },
+    rules: security.configs?.recommended?.rules ?? {
+      "security/detect-buffer-noassert": "warn",
+      "security/detect-child-process": "warn",
+      "security/detect-disable-mustache-escape": "warn",
+      "security/detect-eval-with-expression": "warn",
+      "security/detect-new-buffer": "warn",
+      "security/detect-no-csrf-before-method-override": "warn",
+      "security/detect-non-literal-fs-filename": "warn",
+      "security/detect-non-literal-regexp": "warn",
+      "security/detect-non-literal-require": "warn",
+      "security/detect-object-injection": "warn",
+      "security/detect-possible-timing-attacks": "warn",
+      "security/detect-pseudoRandomBytes": "warn",
+      "security/detect-unsafe-regex": "warn",
+    },
+  }] : []),
+
+  // ─── TypeScript (typescript-eslint) ────────────────────────────────
+  ...(tseslint?.configs?.recommended
+    ? tseslint.configs.recommended.map(c => ({
+        ...c,
+        files: c.files ?? ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+      }))
+    : []),
+
+  // ─── React (eslint-plugin-react + react-hooks) ────────────────────
+  ...(react ? [{
+    files: ["**/*.jsx", "**/*.tsx"],
+    plugins: {
+      react,
+      ...(reactHooks ? { "react-hooks": reactHooks } : {}),
+    },
+    languageOptions: {
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    settings: { react: { version: "detect" } },
+    rules: {
+      ...(react.configs?.recommended?.rules ?? {}),
+      ...(reactHooks?.configs?.recommended?.rules ?? {}),
+      "react/react-in-jsx-scope": "off",
+    },
+  }] : []),
+
+  // ─── Vue (eslint-plugin-vue) ───────────────────────────────────────
+  ...(vue?.configs?.["flat/recommended"] ?? []),
+
+  // ─── Svelte (eslint-plugin-svelte) ─────────────────────────────────
+  ...(svelte?.configs?.["flat/recommended"] ?? []),
+
+  // ─── JSON (eslint-plugin-jsonc) ────────────────────────────────────
+  ...(jsonc?.configs?.["flat/recommended-with-json"] ?? []),
 ];
+
+export default config;

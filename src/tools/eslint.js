@@ -68,7 +68,7 @@ function classifyRule(ruleId) {
 
 export default {
   name: 'eslint',
-  extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'],
+  extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts', '.svelte', '.vue', '.json', '.jsonc'],
   installHint: 'npm install -g eslint eslint-plugin-security eslint-plugin-sonarjs',
 
   buildCommand(targetDir, configPath, { files = [], fix = false } = {}) {
@@ -82,7 +82,7 @@ export default {
     } else {
       args.push(targetDir);
     }
-    return { bin: 'eslint', args };
+    return { bin: 'eslint', args, cwd: targetDir };
   },
 
   parseOutput(stdout, stderr, exitCode) {
@@ -105,6 +105,9 @@ export default {
       if (!fileResult.messages || fileResult.messages.length === 0) continue;
 
       for (const msg of fileResult.messages) {
+        // ESLint v9 flat config emits this for files with no matching config — not a real finding
+        if (!msg.ruleId && msg.message && msg.message.includes('no matching configuration was supplied')) continue;
+
         findings.push({
           file: fileResult.filePath,
           line: msg.line || 0,

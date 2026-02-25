@@ -17,7 +17,7 @@ export default {
     } else {
       args.push(targetDir);
     }
-    return { bin: 'vulture', args };
+    return { bin: 'vulture', args, cwd: targetDir };
   },
 
   parseOutput(stdout, stderr, exitCode) {

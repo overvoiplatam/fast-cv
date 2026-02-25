@@ -134,7 +134,7 @@ export async function run(argv) {
 
       // Step 5: Run tools sequentially
       if (verbose) process.stderr.write(`Running ${readyTools.map(t => t.name).join(', ')}...\n`);
-      const passFiles = only.length > 0 || (fix && exclude.length > 0);
+      const passFiles = only.length > 0 || exclude.length > 0;
       const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files: passFiles ? files : [], fix, licenses });
 
       // Step 5b: Built-in line-count check
