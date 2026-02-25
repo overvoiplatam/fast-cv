@@ -81,6 +81,7 @@ All patterns use gitignore syntax via the `ignore` npm package.
 | `--sbom` | `false` | Generate CycloneDX SBOM (trivy, early exit) |
 | `--max-lines <number>` | `600` | Flag files exceeding this line count (0 to disable) |
 | `--max-lines-omit <patterns>` | — | Comma-separated patterns to exclude from line count check |
+| `--git-only [scope]` | `false` | Scan only git-changed files (`--git-only` = uncommitted+unpushed, `--git-only=uncommitted` = working tree only) |
 | `-f, --format <type>` | `markdown` | Output format: `markdown` or `sarif` |
 
 ### Subcommands

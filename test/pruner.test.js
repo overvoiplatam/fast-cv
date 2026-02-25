@@ -177,6 +177,37 @@ describe('pruneDirectory', () => {
     const { onlyFilter } = await pruneDirectory(tmpDir);
     assert.equal(onlyFilter, null);
   });
+
+  it('gitFiles restricts to listed files only', async () => {
+    await writeFile(join(tmpDir, 'changed.py'), 'x=1');
+    await writeFile(join(tmpDir, 'untouched.py'), 'y=2');
+
+    const { files } = await pruneDirectory(tmpDir, { gitFiles: ['changed.py'] });
+    assert.ok(files.includes('changed.py'));
+    assert.ok(!files.includes('untouched.py'));
+  });
+
+  it('gitFiles + --only gives intersection', async () => {
+    await writeFile(join(tmpDir, 'a.py'), '1');
+    await writeFile(join(tmpDir, 'b.py'), '2');
+    await writeFile(join(tmpDir, 'c.js'), '3');
+
+    // git-changed: a.py, c.js — only pattern: *.py
+    const { files } = await pruneDirectory(tmpDir, {
+      only: ['*.py'],
+      gitFiles: ['a.py', 'c.js'],
+    });
+    assert.ok(files.includes('a.py'));
+    assert.ok(!files.includes('b.py'), 'b.py not in gitFiles');
+    assert.ok(!files.includes('c.js'), 'c.js excluded by --only');
+  });
+
+  it('gitFiles: null has no filtering effect', async () => {
+    await writeFile(join(tmpDir, 'exists.py'), 'x');
+
+    const { files } = await pruneDirectory(tmpDir, { gitFiles: null });
+    assert.ok(files.includes('exists.py'));
+  });
 });
 
 describe('createIgnoreFilter', () => {

@@ -11,6 +11,8 @@ node bin/fast-cv.js --tools=eslint .  # self-scan (JS only, fast)
 node bin/fast-cv.js .                 # full scan
 node bin/fast-cv.js --fix .           # auto-fix (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff)
 node bin/fast-cv.js --format sarif .  # SARIF output
+node bin/fast-cv.js --git-only .      # scan only git-changed files (uncommitted + unpushed)
+node bin/fast-cv.js --git-only=uncommitted . # scan only uncommitted changes
 node bin/fast-cv.js --max-lines=400 . # custom file length threshold
 node bin/fast-cv.js --max-lines=0 .   # disable file length check
 ```

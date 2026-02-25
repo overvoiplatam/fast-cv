@@ -9,6 +9,7 @@ import { formatReport, filterFindings } from './normalizer.js';
 import { formatSarif } from './sarif.js';
 import { tools as allTools } from './tools/index.js';
 import { checkFileLines } from './line-check.js';
+import { getGitChangedFiles } from './git-changes.js';
 
 const EXIT_CLEAN = 0;
 const EXIT_FINDINGS = 1;
@@ -33,6 +34,7 @@ export async function run(argv) {
     .option('--sbom', 'generate CycloneDX SBOM inventory (requires trivy)', false)
     .option('--max-lines <number>', 'flag files exceeding this line count (0 to disable)', '600')
     .option('--max-lines-omit <patterns>', 'comma-separated patterns to exclude from line count check (gitignore syntax)', '')
+    .option('--git-only [scope]', 'scan only git-changed files (default: uncommitted+unpushed; use --git-only=uncommitted for uncommitted only)', false)
     .addOption(new Option('-f, --format <type>', 'output format').choices(['markdown', 'sarif']).default('markdown'))
     .action(async (directory, options) => {
       const targetDir = resolve(directory);
@@ -83,9 +85,27 @@ export async function run(argv) {
         : [];
       const fmt = options.format === 'sarif' ? formatSarif : formatReport;
 
+      // Resolve --git-only: false (off), true/string "all" (default), "uncommitted"
+      let gitFiles = null;
+      if (options.gitOnly !== false) {
+        const scope = (options.gitOnly === true || options.gitOnly === 'all') ? 'all' : 'uncommitted';
+        try {
+          gitFiles = await getGitChangedFiles(targetDir, scope);
+        } catch (e) {
+          process.stderr.write(`Error: ${e.message}\n`);
+          process.exit(EXIT_PRECHECK_FAILED);
+        }
+        if (gitFiles.length === 0) {
+          if (verbose) process.stderr.write('No git-changed files found.\n');
+          process.stdout.write(fmt({ targetDir, results: [], warnings: ['No git-changed files found (clean working tree).'] }));
+          process.exit(EXIT_CLEAN);
+        }
+        if (verbose) process.stderr.write(`Git-changed files: ${gitFiles.length}\n`);
+      }
+
       // Step 1: Prune directory
       if (verbose) process.stderr.write(`Scanning ${targetDir}...\n`);
-      const { files, languages, ignoreFilter, onlyFilter } = await pruneDirectory(targetDir, { exclude, only });
+      const { files, languages, ignoreFilter, onlyFilter } = await pruneDirectory(targetDir, { exclude, only, gitFiles });
       if (verbose) process.stderr.write(`Found ${files.length} files, languages: ${[...languages].join(', ')}\n`);
 
       if (files.length === 0) {
@@ -134,7 +154,7 @@ export async function run(argv) {
 
       // Step 5: Run tools sequentially
       if (verbose) process.stderr.write(`Running ${readyTools.map(t => t.name).join(', ')}...\n`);
-      const passFiles = only.length > 0 || exclude.length > 0;
+      const passFiles = only.length > 0 || exclude.length > 0 || gitFiles !== null;
       const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files: passFiles ? files : [], fix, licenses });
 
       // Step 5b: Built-in line-count check

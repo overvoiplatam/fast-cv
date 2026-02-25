@@ -138,9 +138,10 @@ export async function createIgnoreFilter(targetDir, { exclude = [] } = {}) {
   return ig;
 }
 
-export async function pruneDirectory(targetDir, { exclude = [], only = [] } = {}) {
+export async function pruneDirectory(targetDir, { exclude = [], only = [], gitFiles = null } = {}) {
   const ignoreFilter = await createIgnoreFilter(targetDir, { exclude });
   const onlyFilter = createOnlyFilter(only);
+  const gitFileSet = gitFiles ? new Set(gitFiles) : null;
 
   // Walk directory
   const entries = await readdir(targetDir, { recursive: true, withFileTypes: true });
@@ -161,6 +162,9 @@ export async function pruneDirectory(targetDir, { exclude = [], only = [] } = {}
 
     // Apply --only inclusion filter (if set, only keep matching files)
     if (onlyFilter && !onlyFilter.includes(relPath)) continue;
+
+    // Apply --git-only filter (if set, only keep git-changed files)
+    if (gitFileSet && !gitFileSet.has(relPath)) continue;
 
     files.push(relPath);
     languages.add(ext);
