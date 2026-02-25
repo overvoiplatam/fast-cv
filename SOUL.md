@@ -10,7 +10,7 @@ Make code validation fast, parallel, and AI-friendly. One command, all the scann
 - **Offline-first** — all tools run locally, no cloud APIs, no telemetry
 - **Minimal dependencies** — 3 runtime deps (commander, ignore, yaml). Every new dep needs justification
 - **Convention over configuration** — ship sensible defaults, don't require setup
-- **Parallel by default** — tools run concurrently via Promise.allSettled, never sequentially
+- **Sequential by default** — tools run one at a time to avoid overwhelming low-resource machines, with verbose per-tool progress
 - **Graceful degradation** — missing tools are skipped with warnings, not fatal errors
 
 ## For Vibe Coders

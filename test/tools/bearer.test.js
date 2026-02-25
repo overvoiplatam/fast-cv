@@ -16,7 +16,17 @@ describe('bearer adapter', () => {
     assert.ok(args.includes('scan'));
     assert.ok(args.includes('--format'));
     assert.ok(args.includes('json'));
+    assert.ok(args.includes('--hide-progress-bar'));
+    assert.ok(args.includes('--skip-path'));
     assert.ok(args.includes('/tmp/project'));
+  });
+
+  it('includes skip-path flags for common directories', () => {
+    const { args } = bearer.buildCommand('/tmp/project', null);
+    const skipPaths = args.filter((a, i) => i > 0 && args[i - 1] === '--skip-path');
+    for (const dir of ['node_modules', '__pycache__', '.venv', 'dist', '.git']) {
+      assert.ok(skipPaths.includes(dir), `expected --skip-path ${dir}`);
+    }
   });
 
   it('builds command with config', () => {

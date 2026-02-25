@@ -66,7 +66,7 @@ describe('runTools', () => {
     assert.deepEqual(results[0].findings, []);
   });
 
-  it('runs multiple tools in parallel', async () => {
+  it('runs multiple tools sequentially', async () => {
     const configs = ['tool-a', 'tool-b', 'tool-c'].map(name => ({
       tool: makeTool(name),
       config: { path: null, source: 'none' },
@@ -77,6 +77,34 @@ describe('runTools', () => {
     assert.equal(results.length, 3);
     const names = results.map(r => r.tool).sort();
     assert.deepEqual(names, ['tool-a', 'tool-b', 'tool-c']);
+  });
+
+  it('runs tools in sequential order', async () => {
+    const order = [];
+    const configs = ['first', 'second', 'third'].map(name => ({
+      tool: makeTool(name, {
+        buildCommand() { order.push(name); return { bin: 'echo', args: [name] }; },
+      }),
+      config: { path: null, source: 'none' },
+    }));
+    await runTools(configs, '/tmp', { timeout: 5000 });
+    assert.deepEqual(order, ['first', 'second', 'third']);
+  });
+
+  it('logs progress when verbose is true', async () => {
+    const written = [];
+    const origWrite = process.stderr.write;
+    process.stderr.write = (msg) => { written.push(msg); return true; };
+    try {
+      await runTools(
+        [{ tool: makeTool('verb-tool'), config: { path: null, source: 'none' } }],
+        '/tmp', { timeout: 5000, verbose: true },
+      );
+    } finally {
+      process.stderr.write = origWrite;
+    }
+    assert.ok(written.some(m => m.includes('Running verb-tool')));
+    assert.ok(written.some(m => m.includes('verb-tool done')));
   });
 
   it('handles timeout', async () => {

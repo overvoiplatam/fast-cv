@@ -79,6 +79,8 @@ All patterns use gitignore syntax via the `ignore` npm package.
 | `--fix` | `false` | Auto-fix where supported (ruff, eslint, golangci-lint) |
 | `--licenses` | `false` | Include license compliance scanning (trivy) |
 | `--sbom` | `false` | Generate CycloneDX SBOM (trivy, early exit) |
+| `--max-lines <number>` | `600` | Flag files exceeding this line count (0 to disable) |
+| `--max-lines-omit <patterns>` | — | Comma-separated patterns to exclude from line count check |
 | `-f, --format <type>` | `markdown` | Output format: `markdown` or `sarif` |
 
 ### Subcommands

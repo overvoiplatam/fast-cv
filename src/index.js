@@ -8,6 +8,7 @@ import { runTools } from './runner.js';
 import { formatReport, filterFindings } from './normalizer.js';
 import { formatSarif } from './sarif.js';
 import { tools as allTools } from './tools/index.js';
+import { checkFileLines } from './line-check.js';
 
 const EXIT_CLEAN = 0;
 const EXIT_FINDINGS = 1;
@@ -18,7 +19,7 @@ export async function run(argv) {
 
   program
     .name('fast-cv')
-    .description('Fast Code Validation — parallel linters & security scanners with unified Markdown reports')
+    .description('Fast Code Validation — sequential linters & security scanners with unified Markdown reports')
     .version('0.2.0')
     .argument('[directory]', 'target directory to scan', '.')
     .option('-t, --timeout <seconds>', 'per-tool timeout in seconds', '120')
@@ -30,6 +31,8 @@ export async function run(argv) {
     .option('--fix', 'auto-fix formatting/style issues where supported', false)
     .option('--licenses', 'include open-source license compliance scanning (trivy)', false)
     .option('--sbom', 'generate CycloneDX SBOM inventory (requires trivy)', false)
+    .option('--max-lines <number>', 'flag files exceeding this line count (0 to disable)', '600')
+    .option('--max-lines-omit <patterns>', 'comma-separated patterns to exclude from line count check (gitignore syntax)', '')
     .addOption(new Option('-f, --format <type>', 'output format').choices(['markdown', 'sarif']).default('markdown'))
     .action(async (directory, options) => {
       const targetDir = resolve(directory);
@@ -74,6 +77,10 @@ export async function run(argv) {
         : [];
       const fix = options.fix;
       const licenses = options.licenses;
+      const maxLines = parseInt(options.maxLines, 10);
+      const maxLinesOmit = options.maxLinesOmit
+        ? options.maxLinesOmit.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
       const fmt = options.format === 'sarif' ? formatSarif : formatReport;
 
       // Step 1: Prune directory
@@ -125,9 +132,15 @@ export async function run(argv) {
         }))
       );
 
-      // Step 5: Run tools in parallel
+      // Step 5: Run tools sequentially
       if (verbose) process.stderr.write(`Running ${readyTools.map(t => t.name).join(', ')}...\n`);
       const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files: only.length > 0 ? files : [], fix, licenses });
+
+      // Step 5b: Built-in line-count check
+      if (maxLines > 0) {
+        const lineResult = await checkFileLines(files, targetDir, { maxLines, omitPatterns: maxLinesOmit });
+        results.push(lineResult);
+      }
 
       // Step 6: Post-filter findings through ignore rules
       const filtered = filterFindings(results, targetDir, ignoreFilter, onlyFilter);

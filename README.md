@@ -1,6 +1,6 @@
 # fast-cv (Fast Code Validation)
 
-A local, offline CLI tool that orchestrates multiple linters and security scanners in parallel, producing a unified tagged Markdown report optimized for LLM/AI agent consumption.
+A local, offline CLI tool that orchestrates multiple linters and security scanners sequentially, producing a unified tagged Markdown report optimized for LLM/AI agent consumption.
 
 ## Supported Tools
 
@@ -118,6 +118,8 @@ fast-cv [directory] [options]
 | `--fix` | Auto-fix formatting/style issues where supported | `false` |
 | `--licenses` | Include open-source license compliance scanning (trivy) | `false` |
 | `--sbom` | Generate CycloneDX SBOM inventory to stdout (requires trivy) | `false` |
+| `--max-lines <number>` | Flag files exceeding this line count (0 to disable) | `600` |
+| `--max-lines-omit <patterns>` | Comma-separated patterns to exclude from line count check (gitignore syntax) | none |
 | `-v, --verbose` | Show detailed output on stderr | `false` |
 | `--auto-install` | Auto-install missing tools | `false` |
 
@@ -187,6 +189,24 @@ Filtering happens at three levels for maximum efficiency:
 1. **Pruner level**: File discovery is narrowed to matching files only, so language detection is accurate.
 2. **Tool level**: When possible, matching file paths are passed directly to tools as arguments instead of the whole directory (ruff, eslint, semgrep, bearer, mypy, typos). Cross-file tools like jscpd, trivy, and module-scoped tools like golangci-lint still scan the full directory.
 3. **Post-filter level**: As a safety net, findings outside the `--only` set are stripped from the report. This catches any results from tools that must scan broader than the file list.
+
+## `--max-lines` Flag
+
+The `--max-lines` flag controls a built-in file length check that flags files exceeding a line count threshold with a `[REFACTOR]` finding. This runs on every scan — no external tool required.
+
+```bash
+# Default: flag files over 600 lines
+fast-cv .
+
+# Custom threshold: flag files over 400 lines
+fast-cv --max-lines=400 .
+
+# Disable the check entirely
+fast-cv --max-lines=0 .
+
+# Exempt specific files/directories (gitignore syntax, comma-separated)
+fast-cv --max-lines-omit="migrations/,*.generated.js" .
+```
 
 ## `--fix` Flag
 

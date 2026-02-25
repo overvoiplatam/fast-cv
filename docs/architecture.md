@@ -1,6 +1,6 @@
 # Architecture
 
-Node.js ESM CLI that orchestrates linters and security scanners in parallel, outputting unified Markdown or SARIF reports. Zero build step, 3 runtime dependencies.
+Node.js ESM CLI that orchestrates linters and security scanners sequentially, outputting unified Markdown or SARIF reports. Zero build step, 3 runtime dependencies.
 
 ## File Map
 
@@ -11,7 +11,7 @@ Node.js ESM CLI that orchestrates linters and security scanners in parallel, out
 | `src/pruner.js` | 190 | File discovery, ignore/only filtering, language detection |
 | `src/precheck.js` | 110 | Tool installation verification and auto-install |
 | `src/config-resolver.js` | 75 | Config resolution chain (local → user → package → none) |
-| `src/runner.js` | 130 | Parallel tool execution via `Promise.allSettled` |
+| `src/runner.js` | 130 | Sequential tool execution with verbose progress |
 | `src/normalizer.js` | 109 | Markdown report formatting + post-filter |
 | `src/sarif.js` | 103 | SARIF 2.1.0 output formatting |
 | `src/tools/index.js` | 14 | Tool registry — exports all 11 adapters |
@@ -43,7 +43,7 @@ src/index.js
 3. **Filter Tools** (L90-104) — Match tools by language extensions + `--tools` flag
 4. **Precheck** (L112-116) — Verify tools are installed (optional auto-install)
 5. **Resolve Configs** (L121-126) — Find config for each tool (4-level chain)
-6. **Parallel Run** (L129-130) — `Promise.allSettled` all tools with timeout
+6. **Sequential Run** (L129-130) — Run tools one at a time with timeout + verbose progress
 7. **Post-Filter** (L133) — Strip findings from ignored/excluded files
 8. **Format** (L137) — Generate Markdown or SARIF report
 9. **Output** (L138) — Write report to stdout
@@ -68,7 +68,7 @@ src/index.js
                       │
                 ┌─────────────┐
                 │   runner    │──> ToolResult[]
-                │ (parallel)  │
+                │(sequential) │
                 └─────────────┘
                       │
                 ┌─────────────┐
@@ -127,7 +127,7 @@ src/index.js
 
 ## Key Design Decisions
 
-- **`Promise.allSettled`** — never fails the whole run if one tool errors
+- **Sequential execution** — tools run one at a time to avoid overwhelming low-resource machines; errors in one tool don't affect others
 - **SIGTERM → SIGKILL** — 5s grace after SIGTERM before force-kill (runner.js L20-24)
 - **`NO_COLOR=1`** — all tools run without ANSI codes for clean parsing (runner.js L10)
 - **Post-filter safety net** — findings re-checked against ignore rules after tools run (normalizer.js L3-17)

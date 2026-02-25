@@ -3,13 +3,25 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+const SKIP_PATHS = [
+  'node_modules', 'vendor', '.yarn', 'bower_components',
+  '__pycache__', '.venv', 'venv', '.tox', '.mypy_cache',
+  '.git', '.hg', '.svn',
+  'dist', 'build', 'out', 'target', '_build',
+  '.next', '.nuxt', '.angular',
+  'coverage', '.cache',
+];
+
 export default {
   name: 'bearer',
   extensions: ['.py', '.js', '.jsx', '.ts', '.tsx', '.go', '.java', '.rb', '.php'],
   installHint: 'curl -sfL https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.sh | sh -s -- -b ~/.local/bin',
 
   buildCommand(targetDir, configPath, { files = [] } = {}) {
-    const args = ['scan', '--format', 'json', '--quiet'];
+    const args = ['scan', '--format', 'json', '--quiet', '--hide-progress-bar'];
+    for (const p of SKIP_PATHS) {
+      args.push('--skip-path', p);
+    }
     if (configPath) {
       args.push('--config-file', configPath);
     }
@@ -18,7 +30,7 @@ export default {
     } else {
       args.push(targetDir);
     }
-    return { bin: 'bearer', args };
+    return { bin: 'bearer', args, cwd: targetDir };
   },
 
   parseOutput(stdout, stderr, exitCode) {

@@ -10,6 +10,7 @@ function spawnAndCollect(bin, args, opts) {
       env: { ...process.env, NO_COLOR: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 0,
+      detached: true,
     });
 
     proc.stdout.on('data', (chunk) => { stdout += chunk; });
@@ -18,9 +19,10 @@ function spawnAndCollect(bin, args, opts) {
     let killed = false;
     const timer = setTimeout(() => {
       killed = true;
-      proc.kill('SIGTERM');
+      // Kill the entire process group (bearer, semgrep, etc. spawn workers)
+      try { process.kill(-proc.pid, 'SIGTERM'); } catch { /* already dead */ }
       setTimeout(() => {
-        try { proc.kill('SIGKILL'); } catch { /* already dead */ }
+        try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already dead */ }
       }, 5000);
     }, opts.timeout);
 
@@ -111,20 +113,21 @@ export async function runTools(toolConfigs, targetDir, options = {}) {
   const files = options.files || [];
   const fix = options.fix || false;
   const licenses = options.licenses || false;
+  const verbose = options.verbose || false;
 
-  const promises = toolConfigs.map(({ tool, config }) =>
-    runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses })
-  );
+  const results = [];
+  for (const { tool, config } of toolConfigs) {
+    if (verbose) process.stderr.write(`  Running ${tool.name}...\n`);
 
-  const settled = await Promise.allSettled(promises);
+    const result = await runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses });
 
-  return settled.map(result => {
-    if (result.status === 'fulfilled') return result.value;
-    return {
-      tool: 'unknown',
-      findings: [],
-      error: result.reason?.message || 'Unknown error',
-      duration: 0,
-    };
-  });
+    if (verbose) {
+      const status = result.error
+        ? `error: ${result.error}`
+        : `${result.findings.length} finding(s)`;
+      process.stderr.write(`  ${tool.name} done (${(result.duration / 1000).toFixed(1)}s) — ${status}\n`);
+    }
+    results.push(result);
+  }
+  return results;
 }

@@ -1,6 +1,6 @@
 # fast-cv
 
-Fast Code Validation — parallel linters & security scanners with unified Markdown/SARIF reports.
+Fast Code Validation — sequential linters & security scanners with unified Markdown/SARIF reports.
 Node.js ESM, v0.2.0, 3 dependencies, zero build step.
 
 ## Commands
@@ -11,11 +11,13 @@ node bin/fast-cv.js --tools=eslint .  # self-scan (JS only, fast)
 node bin/fast-cv.js .                 # full scan
 node bin/fast-cv.js --fix .           # auto-fix (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff)
 node bin/fast-cv.js --format sarif .  # SARIF output
+node bin/fast-cv.js --max-lines=400 . # custom file length threshold
+node bin/fast-cv.js --max-lines=0 .   # disable file length check
 ```
 
 ## Architecture
 
-10-step pipeline: CLI parse → prune → filter tools → precheck → resolve configs → parallel run → post-filter → format → output → exit code.
+10-step pipeline: CLI parse → prune → filter tools → precheck → resolve configs → sequential run → post-filter → format → output → exit code.
 
 | File | Lines | Role |
 |------|------:|------|
@@ -23,7 +25,7 @@ node bin/fast-cv.js --format sarif .  # SARIF output
 | `src/pruner.js` | 190 | File discovery, ignore/only filtering |
 | `src/precheck.js` | 110 | Tool installation checks |
 | `src/config-resolver.js` | 75 | Config resolution (local → user → package → none) |
-| `src/runner.js` | 130 | Parallel execution via Promise.allSettled |
+| `src/runner.js` | 130 | Sequential execution with verbose progress |
 | `src/normalizer.js` | 109 | Markdown report + post-filter |
 | `src/sarif.js` | 103 | SARIF 2.1.0 output |
 | `src/tools/*.js` | 15 files | One adapter per tool |

@@ -19,7 +19,7 @@ node --test --test-name-pattern="ruff" test/tools/ruff.test.js  # single tool
 | `test/normalizer.test.js` | 265 | Markdown report formatting, finding filtering |
 | `test/sarif.test.js` | 241 | SARIF 2.1.0 output, tag→level mapping, schema compliance |
 | `test/precheck.test.js` | 72 | Tool installation checks, skip/warn behavior |
-| `test/runner.test.js` | 231 | Parallel execution, timeout, spawn errors, command building |
+| `test/runner.test.js` | 231 | Sequential execution, timeout, spawn errors, verbose logging |
 
 ### Tool Adapters (11 files, ~1353 lines)
 
