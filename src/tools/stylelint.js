@@ -14,6 +14,7 @@ function classifyRule(rule) {
 export default {
   name: 'stylelint',
   extensions: ['.css', '.scss', '.sass', '.less'],
+  supportsFix: true,
   installHint: 'npm install -g stylelint stylelint-config-standard',
 
   buildCommand(targetDir, configPath, { files = [], fix = false } = {}) {

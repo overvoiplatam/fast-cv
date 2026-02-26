@@ -2,7 +2,7 @@
 
 ## Mission
 
-Make code validation fast, parallel, and AI-friendly. One command, all the scanners, unified output.
+Make code validation fast, sequential, and AI-friendly. One command, all the scanners, unified output.
 
 ## Principles
 
@@ -32,6 +32,6 @@ fast-cv is your safety net. Write fast, iterate quickly — fast-cv catches what
 ## Quality Bar
 
 Every change to fast-cv must:
-1. Pass `npm test` (17 test files, ~2500 lines of tests)
+1. Pass `npm test` (23 test files, ~3200 lines of tests)
 2. Pass self-validation: `node bin/fast-cv.js --tools=eslint .`
 3. Follow existing patterns — read the code before changing it

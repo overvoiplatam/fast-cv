@@ -120,6 +120,11 @@ describe('eslint adapter', () => {
     // sonarjs fallback → REFACTOR
     assert.equal(eslint.parseOutput(make('sonarjs/some-new-rule'), '', 1)[0].tag, 'REFACTOR');
 
+    // JSDoc rules → DOCS
+    assert.equal(eslint.parseOutput(make('jsdoc/require-jsdoc'), '', 1)[0].tag, 'DOCS');
+    assert.equal(eslint.parseOutput(make('jsdoc/require-param'), '', 1)[0].tag, 'DOCS');
+    assert.equal(eslint.parseOutput(make('jsdoc/valid-types'), '', 1)[0].tag, 'DOCS');
+
     // Unknown → LINTER
     assert.equal(eslint.parseOutput(make('semi'), '', 1)[0].tag, 'LINTER');
     assert.equal(eslint.parseOutput(make('eqeqeq'), '', 1)[0].tag, 'LINTER');

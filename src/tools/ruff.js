@@ -28,6 +28,7 @@ function mapSeverity(ruffSeverity) {
 export default {
   name: 'ruff',
   extensions: ['.py', '.pyi'],
+  supportsFix: true,
   installHint: 'pipx install ruff  (or: pip3 install --user ruff)',
 
   buildCommand(targetDir, configPath, { files = [], fix = false } = {}) {

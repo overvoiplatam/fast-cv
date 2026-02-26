@@ -63,12 +63,14 @@ function classifyRule(ruleId) {
   if (REFACTOR_RULES.has(ruleId)) return 'REFACTOR';
   if (BUG_RULES.has(ruleId)) return 'BUG';
   if (ruleId.startsWith('security/')) return 'SECURITY';
+  if (ruleId.startsWith('jsdoc/')) return 'DOCS';
   return 'LINTER';
 }
 
 export default {
   name: 'eslint',
   extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts', '.svelte', '.vue', '.json', '.jsonc'],
+  supportsFix: true,
   installHint: 'npm install -g eslint eslint-plugin-security eslint-plugin-sonarjs',
 
   buildCommand(targetDir, configPath, { files = [], fix = false } = {}) {

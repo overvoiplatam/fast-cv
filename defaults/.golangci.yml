@@ -1,0 +1,10 @@
+linters:
+  enable:
+    - gocognit
+    - gocritic
+    - revive
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+        severity: warning

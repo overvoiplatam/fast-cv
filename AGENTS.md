@@ -28,8 +28,17 @@ node bin/fast-cv.js --tools=eslint,semgrep .   # lint + SAST
 ### Auto-fix
 
 ```bash
-node bin/fast-cv.js --fix .                    # fix all fixable
+node bin/fast-cv.js --fix .                    # run only fixers, apply fixes, exit 0
 node bin/fast-cv.js --tools=eslint --fix .     # fix eslint only
+node bin/fast-cv.js --fix --git-only .         # fix only git-changed files
+```
+
+**Note:** `--fix` runs only fix-capable tools (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff), applies fixes, outputs a summary to stderr, and exits 0. No findings report is generated. With shipped default configs, `--fix` only applies formatting changes (safe). Full semantic fix requires a local project config.
+
+### Suppress docstring warnings
+
+```bash
+node bin/fast-cv.js --no-docstring .           # hide DOCS tag findings
 ```
 
 ### SARIF output

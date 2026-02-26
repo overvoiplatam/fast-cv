@@ -15,17 +15,23 @@ const SECURITY_LINTERS = new Set([
   'gosec',
 ]);
 
+const DOCS_LINTERS = new Set([
+  'revive',
+]);
+
 function classifyLinter(linterName) {
   if (!linterName) return 'LINTER';
   if (REFACTOR_LINTERS.has(linterName)) return 'REFACTOR';
   if (BUG_LINTERS.has(linterName)) return 'BUG';
   if (SECURITY_LINTERS.has(linterName)) return 'SECURITY';
+  if (DOCS_LINTERS.has(linterName)) return 'DOCS';
   return 'LINTER';
 }
 
 export default {
   name: 'golangci-lint',
   extensions: ['.go'],
+  supportsFix: true,
   installHint: 'curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ~/.local/bin',
 
   buildCommand(targetDir, configPath, { files = [], fix = false } = {}) {
@@ -33,7 +39,7 @@ export default {
     if (configPath) {
       args.push('--config', configPath);
     } else {
-      args.push('--enable', 'gocognit,gocritic');
+      args.push('--enable', 'gocognit');
     }
     if (fix) args.push('--fix');
     if (files.length > 0) {

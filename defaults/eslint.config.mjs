@@ -17,6 +17,7 @@ const reactHooks = await tryImport("eslint-plugin-react-hooks");
 const vue = await tryImport("eslint-plugin-vue");
 const svelte = await tryImport("eslint-plugin-svelte");
 const jsonc = await tryImport("eslint-plugin-jsonc");
+const jsdoc = await tryImport("eslint-plugin-jsdoc");
 
 const config = [
   // ─── sonarjs recommended (JS + TS) ─────────────────────────────────
@@ -109,6 +110,24 @@ const config = [
 
   // ─── JSON (eslint-plugin-jsonc) ────────────────────────────────────
   ...(jsonc?.configs?.["flat/recommended-with-json"] ?? []),
+
+  // ─── JSDoc (eslint-plugin-jsdoc) ──────────────────────────────────
+  ...(jsdoc ? [{
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+    plugins: { jsdoc },
+    rules: {
+      "jsdoc/require-jsdoc": ["warn", {
+        require: { FunctionDeclaration: true, MethodDefinition: false, ClassDeclaration: true },
+        publicOnly: true,
+      }],
+      "jsdoc/require-description": "warn",
+      "jsdoc/require-param": "warn",
+      "jsdoc/require-returns": "warn",
+      "jsdoc/valid-types": "warn",
+      "jsdoc/check-param-names": "warn",
+      "jsdoc/check-tag-names": "warn",
+    },
+  }] : []),
 ];
 
 export default config;

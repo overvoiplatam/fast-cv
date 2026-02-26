@@ -39,6 +39,7 @@ const PACKAGE_DEFAULT_FILES = {
   semgrep: 'semgrep',  // directory — semgrep reads all YAML files inside
   mypy: 'mypy.ini',
   stylelint: '.stylelintrc.json',
+  'golangci-lint': '.golangci.yml',
 };
 
 async function fileExists(filePath) {

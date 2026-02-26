@@ -9,7 +9,7 @@ describe('clippy adapter', () => {
     assert.ok(clippy.installHint.includes('clippy'));
   });
 
-  it('builds command with cargo clippy', () => {
+  it('builds command with cargo clippy (no config adds -W missing-docs)', () => {
     const { bin, args, cwd } = clippy.buildCommand('/tmp/rust-project', null);
     assert.equal(bin, 'cargo');
     assert.ok(args.includes('clippy'));
@@ -18,7 +18,15 @@ describe('clippy adapter', () => {
     assert.ok(args.includes('--all-features'));
     assert.ok(args.includes('--'));
     assert.ok(args.includes('--no-deps'));
+    assert.ok(args.includes('-W'));
+    assert.ok(args.includes('missing-docs'));
     assert.equal(cwd, '/tmp/rust-project');
+  });
+
+  it('builds command with config (no -W missing-docs)', () => {
+    const { args } = clippy.buildCommand('/tmp/rust-project', '/etc/clippy.toml');
+    assert.ok(!args.includes('-W'));
+    assert.ok(!args.includes('missing-docs'));
   });
 
   it('builds command with --fix', () => {
@@ -95,6 +103,7 @@ describe('clippy adapter', () => {
     assert.equal(clippy.parseOutput(make('clippy::perf_issue'), '', 0)[0].tag, 'REFACTOR');
     assert.equal(clippy.parseOutput(make('clippy::complexity_thing'), '', 0)[0].tag, 'REFACTOR');
     assert.equal(clippy.parseOutput(make('clippy::style_check'), '', 0)[0].tag, 'LINTER');
+    assert.equal(clippy.parseOutput(make('missing_docs'), '', 0)[0].tag, 'DOCS');
   });
 
   it('returns empty for clean output', () => {

@@ -8,7 +8,7 @@ describe('golangci-lint adapter', () => {
     assert.deepEqual(golangciLint.extensions, ['.go']);
   });
 
-  it('builds command without config (enables gocognit,gocritic)', () => {
+  it('builds command without config (enables gocognit)', () => {
     const { bin, args } = golangciLint.buildCommand('/tmp/project', null);
     assert.equal(bin, 'golangci-lint');
     assert.ok(args.includes('run'));
@@ -16,7 +16,7 @@ describe('golangci-lint adapter', () => {
     assert.ok(args.includes('json'));
     assert.ok(!args.includes('--config'));
     assert.ok(args.includes('--enable'));
-    assert.ok(args.includes('gocognit,gocritic'));
+    assert.ok(args.includes('gocognit'));
   });
 
   it('builds command with config (skips --enable)', () => {
@@ -78,7 +78,7 @@ describe('golangci-lint adapter', () => {
     assert.equal(golangciLint.parseOutput(make('staticcheck'), '', 1)[0].tag, 'BUG');
     assert.equal(golangciLint.parseOutput(make('errcheck'), '', 1)[0].tag, 'BUG');
     assert.equal(golangciLint.parseOutput(make('gosec'), '', 1)[0].tag, 'SECURITY');
-    assert.equal(golangciLint.parseOutput(make('revive'), '', 1)[0].tag, 'LINTER');
+    assert.equal(golangciLint.parseOutput(make('revive'), '', 1)[0].tag, 'DOCS');
     assert.equal(golangciLint.parseOutput(make('gocritic'), '', 1)[0].tag, 'LINTER');
   });
 

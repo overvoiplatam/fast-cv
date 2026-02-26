@@ -44,7 +44,7 @@ describe('resolveConfig', () => {
   it('returns none for tools without package defaults', async () => {
     const freshDir = await mkdtemp(join(tmpdir(), 'fcv-config-nodef-'));
     try {
-      const result = await resolveConfig('golangci-lint', freshDir);
+      const result = await resolveConfig('bearer', freshDir);
       assert.equal(result.source, 'none');
       assert.equal(result.path, null);
     } finally {

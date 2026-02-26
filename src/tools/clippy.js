@@ -9,6 +9,7 @@ const REFACTOR_KEYWORDS = /perf|complexity/;
 
 function classifyLint(lintName) {
   if (!lintName) return 'LINTER';
+  if (lintName === 'missing_docs') return 'DOCS';
   if (BUG_KEYWORDS.test(lintName)) return 'BUG';
   if (REFACTOR_KEYWORDS.test(lintName)) return 'REFACTOR';
   return 'LINTER';
@@ -17,14 +18,16 @@ function classifyLint(lintName) {
 export default {
   name: 'clippy',
   extensions: ['.rs'],
+  supportsFix: true,
   installHint: 'rustup component add clippy',
 
-  buildCommand(targetDir, _configPath, { fix = false } = {}) {
+  buildCommand(targetDir, configPath, { fix = false } = {}) {
     const args = ['clippy'];
     if (fix) {
       args.push('--fix', '--allow-dirty', '--allow-staged');
     }
     args.push('--message-format=json', '--all-targets', '--all-features', '--', '--no-deps');
+    if (!configPath) args.push('-W', 'missing-docs');
     return { bin: 'cargo', args, cwd: targetDir };
   },
 

@@ -34,6 +34,7 @@ export async function run(argv) {
     .option('--sbom', 'generate CycloneDX SBOM inventory (requires trivy)', false)
     .option('--max-lines <number>', 'flag files exceeding this line count (0 to disable)', '600')
     .option('--max-lines-omit <patterns>', 'comma-separated patterns to exclude from line count check (gitignore syntax)', '')
+    .option('--no-docstring', 'suppress documentation findings (DOCS tag)', false)
     .option('--git-only [scope]', 'scan only git-changed files (default: uncommitted+unpushed; use --git-only=uncommitted for uncommitted only)', false)
     .addOption(new Option('-f, --format <type>', 'output format').choices(['markdown', 'sarif']).default('markdown'))
     .action(async (directory, options) => {
@@ -97,6 +98,10 @@ export async function run(argv) {
         }
         if (gitFiles.length === 0) {
           if (verbose) process.stderr.write('No git-changed files found.\n');
+          if (fix) {
+            process.stderr.write('Nothing to fix (clean working tree).\n');
+            process.exit(EXIT_CLEAN);
+          }
           process.stdout.write(fmt({ targetDir, results: [], warnings: ['No git-changed files found (clean working tree).'] }));
           process.exit(EXIT_CLEAN);
         }
@@ -109,6 +114,10 @@ export async function run(argv) {
       if (verbose) process.stderr.write(`Found ${files.length} files, languages: ${[...languages].join(', ')}\n`);
 
       if (files.length === 0) {
+        if (fix) {
+          process.stderr.write('No fixable files found.\n');
+          process.exit(EXIT_CLEAN);
+        }
         process.stdout.write(fmt({ targetDir, results: [], warnings: ['No scannable files found.'] }));
         process.exit(EXIT_CLEAN);
       }
@@ -131,6 +140,10 @@ export async function run(argv) {
       }
 
       if (applicableTools.length === 0) {
+        if (fix) {
+          process.stderr.write('No fix-capable tools found for detected languages.\n');
+          process.exit(EXIT_CLEAN);
+        }
         process.stdout.write(fmt({ targetDir, results: [], warnings: ['No applicable tools for detected languages.'] }));
         process.exit(EXIT_CLEAN);
       }
@@ -144,6 +157,38 @@ export async function run(argv) {
 
       const readyTools = precheckResult.tools;
 
+      // Fix-only mode: run only fix-capable tools, apply fixes, exit
+      if (fix) {
+        const fixTools = readyTools.filter(t => t.supportsFix);
+        if (fixTools.length === 0) {
+          process.stderr.write('No fix-capable tools found for detected languages.\n');
+          process.exit(EXIT_CLEAN);
+        }
+
+        const fixConfigs = await Promise.all(
+          fixTools.map(async tool => ({
+            tool,
+            config: await resolveConfig(tool.name, targetDir),
+          }))
+        );
+
+        if (verbose) process.stderr.write(`Fixing with ${fixTools.map(t => t.name).join(', ')}...\n`);
+        const passFiles = only.length > 0 || exclude.length > 0 || gitFiles !== null;
+        const results = await runTools(fixConfigs, targetDir, { timeout, verbose, files: passFiles ? files : [], fix: true });
+
+        const warnings = [];
+        for (const r of results) {
+          if (r.fixSkipped) {
+            warnings.push(`${r.tool}: --fix limited to formatting (using shipped default config)`);
+          }
+        }
+
+        const toolSummary = results.map(r => `${r.tool} (${(r.duration / 1000).toFixed(1)}s)`).join(', ');
+        process.stderr.write(`Fixed with: ${toolSummary}\n`);
+        for (const w of warnings) process.stderr.write(`  ${w}\n`);
+        process.exit(EXIT_CLEAN);
+      }
+
       // Step 4: Resolve configs
       const toolConfigs = await Promise.all(
         readyTools.map(async tool => ({
@@ -155,7 +200,7 @@ export async function run(argv) {
       // Step 5: Run tools sequentially
       if (verbose) process.stderr.write(`Running ${readyTools.map(t => t.name).join(', ')}...\n`);
       const passFiles = only.length > 0 || exclude.length > 0 || gitFiles !== null;
-      const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files: passFiles ? files : [], fix, licenses });
+      const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files: passFiles ? files : [], licenses });
 
       // Step 5b: Built-in line-count check
       if (maxLines > 0) {
@@ -166,18 +211,16 @@ export async function run(argv) {
       // Step 6: Post-filter findings through ignore rules
       const filtered = filterFindings(results, targetDir, ignoreFilter, onlyFilter);
 
-      // Step 7: Format and output report
-      const warnings = precheckResult.warnings || [];
-
-      // Collect fix-skipped warnings (tools using shipped defaults skip semantic --fix)
-      if (fix) {
-        for (const r of results) {
-          if (r.fixSkipped) {
-            warnings.push(`${r.tool}: --fix limited to formatting (using shipped default config, not project config)`);
-          }
+      // Step 6b: Suppress DOCS findings if --no-docstring
+      if (options.noDocstring) {
+        for (const r of filtered) {
+          if (r.findings) r.findings = r.findings.filter(f => f.tag !== 'DOCS');
         }
       }
-      const report = fmt({ targetDir, results: filtered, warnings, fix });
+
+      // Step 7: Format and output report
+      const warnings = precheckResult.warnings || [];
+      const report = fmt({ targetDir, results: filtered, warnings });
       process.stdout.write(report);
 
       const hasFindings = filtered.some(r => r.findings && r.findings.length > 0);

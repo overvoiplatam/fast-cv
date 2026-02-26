@@ -13,6 +13,7 @@ function classifyRule(code) {
 export default {
   name: 'sqlfluff',
   extensions: ['.sql'],
+  supportsFix: true,
   installHint: 'pipx install sqlfluff  (or: pip3 install --user sqlfluff)',
 
   buildCommand(targetDir, _configPath, { files = [], fix = false } = {}) {

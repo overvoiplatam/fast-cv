@@ -12,6 +12,7 @@ export default {
   extensions: string[],    // file extensions this tool handles (e.g. ['.py', '.pyi'])
   installHint: string,     // shell command to install the tool
   optIn: boolean,          // if true, only runs when explicitly listed in --tools
+  supportsFix: boolean,    // if true, --fix mode includes this tool (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff)
 
   async checkInstalled(): boolean,
   buildCommand(targetDir, configPath, options?): { bin, args, cwd? },
@@ -26,7 +27,7 @@ export default {
 
 | Option | Type | Used By |
 |--------|------|---------|
-| `files` | `string[]` | ruff, eslint, semgrep, bearer, mypy, typos, vulture, stylelint, sqlfluff |
+| `files` | `string[]` | ruff, eslint, semgrep, bearer, golangci-lint, mypy, typos, vulture, stylelint, sqlfluff |
 | `fix` | `boolean` | ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff |
 | `licenses` | `boolean` | trivy |
 
@@ -35,10 +36,10 @@ export default {
 | # | Name | File | Extensions | Tags | Opt-In | Fix | Config |
 |---|------|------|------------|------|--------|-----|--------|
 | 1 | ruff | `src/tools/ruff.js` | `.py .pyi` | LINTER REFACTOR FORMAT DOCS BUG SECURITY | no | yes | ruff.toml |
-| 2 | eslint | `src/tools/eslint.js` | `.js .jsx .ts .tsx .mjs .cjs .mts .cts .svelte .vue .json .jsonc` | LINTER SECURITY REFACTOR BUG | no | yes | eslint.config.mjs |
+| 2 | eslint | `src/tools/eslint.js` | `.js .jsx .ts .tsx .mjs .cjs .mts .cts .svelte .vue .json .jsonc` | LINTER SECURITY REFACTOR BUG DOCS | no | yes | eslint.config.mjs |
 | 3 | semgrep | `src/tools/semgrep.js` | `.py .js .jsx .ts .tsx .go .java .rb .php .rs .c .h .cpp .hpp .cs .kt .kts .swift .scala` | SECURITY BUG | no | no | semgrep/ (dir) |
 | 4 | bearer | `src/tools/bearer.js` | `.py .js .jsx .ts .tsx .go .java .rb .php` | PRIVACY | no | no | .bearer.yml |
-| 5 | golangci-lint | `src/tools/golangci-lint.js` | `.go` | LINTER REFACTOR BUG SECURITY | no | yes | .golangci.yml |
+| 5 | golangci-lint | `src/tools/golangci-lint.js` | `.go` | LINTER REFACTOR BUG SECURITY DOCS | no | yes | .golangci.yml |
 | 6 | jscpd | `src/tools/jscpd.js` | all scannable | DUPLICATION | no | no | .jscpd.json |
 | 7 | trivy | `src/tools/trivy.js` | `.py .js .ts .go .java .rb .php .tf .yaml .yml .rs .kt .kts .cs .c .cpp .swift .sql` | DEPENDENCY INFRA SECRET LICENSE | no | no | trivy.yaml |
 | 8 | mypy | `src/tools/mypy.js` | `.py .pyi` | TYPE_ERROR | no | no | mypy.ini |
@@ -46,7 +47,7 @@ export default {
 | 10 | vulture | `src/tools/vulture.js` | `.py .pyi` | DEAD_CODE | no | no | — |
 | 11 | knip | `src/tools/knip.js` | `.js .jsx .ts .tsx .mjs .cjs` | DEAD_CODE | no | no | — |
 | 12 | tsc | `src/tools/tsc.js` | `.ts .tsx .mts .cts` | TYPE_ERROR | no | no | tsconfig.json |
-| 13 | clippy | `src/tools/clippy.js` | `.rs` | LINTER BUG REFACTOR | no | yes | clippy.toml |
+| 13 | clippy | `src/tools/clippy.js` | `.rs` | LINTER BUG REFACTOR DOCS | no | yes | clippy.toml |
 | 14 | stylelint | `src/tools/stylelint.js` | `.css .scss .sass .less` | LINTER FORMAT | no | yes | .stylelintrc.json |
 | 15 | sqlfluff | `src/tools/sqlfluff.js` | `.sql` | LINTER FORMAT BUG | no | yes | — |
 
@@ -72,7 +73,7 @@ Tags categorize findings by type. Each tag maps to a SARIF severity level.
 | FORMAT | note | Formatting / whitespace issues |
 | DUPLICATION | note | Copy-paste / code duplication |
 
-Tag-to-level mapping is defined in `src/sarif.js` (L3-19).
+Tag-to-level mapping is defined in `src/sarif.js` (L4-20).
 
 ## Adding a New Tool
 
