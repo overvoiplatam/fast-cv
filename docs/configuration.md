@@ -76,13 +76,26 @@ All patterns use gitignore syntax via the `ignore` npm package.
 | `--auto-install` | `false` | Auto-install missing tools |
 | `-x, --exclude <patterns>` | — | Comma-separated ignore patterns |
 | `--only <patterns>` | — | Scan only matching files/globs |
-| `--fix` | `false` | Auto-fix where supported (ruff, eslint, golangci-lint) |
+| `--fix` | `false` | Auto-fix where supported (see Fix Safety below) |
 | `--licenses` | `false` | Include license compliance scanning (trivy) |
 | `--sbom` | `false` | Generate CycloneDX SBOM (trivy, early exit) |
 | `--max-lines <number>` | `600` | Flag files exceeding this line count (0 to disable) |
 | `--max-lines-omit <patterns>` | — | Comma-separated patterns to exclude from line count check |
 | `--git-only [scope]` | `false` | Scan only git-changed files (`--git-only` = uncommitted+unpushed, `--git-only=uncommitted` = working tree only) |
 | `-f, --format <type>` | `markdown` | Output format: `markdown` or `sarif` |
+
+### Fix Safety
+
+`--fix` behavior depends on config source to prevent shipped default configs from making dangerous semantic changes to projects that didn't opt in:
+
+| Config Source | Formatting (`preFixCommands`) | Semantic (`--fix` flag) | Example |
+|---|---|---|---|
+| `package-default` | Runs | Skipped | ruff format runs, ruff check --fix does not |
+| `local` | Runs | Runs | Project opted in — full fix |
+| `user-default` | Runs | Runs | User explicitly configured |
+| `none` | N/A | Runs | Tool uses its own defaults |
+
+When semantic fix is skipped, a warning appears in the report. To get full `--fix` behavior, provide a local config file for the tool.
 
 ### Subcommands
 

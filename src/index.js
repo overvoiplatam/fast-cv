@@ -168,6 +168,15 @@ export async function run(argv) {
 
       // Step 7: Format and output report
       const warnings = precheckResult.warnings || [];
+
+      // Collect fix-skipped warnings (tools using shipped defaults skip semantic --fix)
+      if (fix) {
+        for (const r of results) {
+          if (r.fixSkipped) {
+            warnings.push(`${r.tool}: --fix limited to formatting (using shipped default config, not project config)`);
+          }
+        }
+      }
       const report = fmt({ targetDir, results: filtered, warnings, fix });
       process.stdout.write(report);
 

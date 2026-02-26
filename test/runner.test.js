@@ -207,4 +207,46 @@ describe('runTools', () => {
 
     assert.equal(preFixCalled, false);
   });
+
+  // Helper: run a fix-capturing tool with a given config source
+  async function runFixGated(source, toolOverrides = {}) {
+    let receivedFix;
+    const results = await runTools(
+      [{ tool: makeTool(`${source}-tool`, {
+        buildCommand(td, cp, opts) { receivedFix = opts.fix; return { bin: 'echo', args: ['ok'] }; },
+        parseOutput() { return []; },
+        ...toolOverrides,
+      }), config: { path: `/cfg/${source}`, source } }],
+      '/tmp',
+      { timeout: 5000, fix: true },
+    );
+    return { receivedFix, results };
+  }
+
+  it('skips semantic fix when config source is package-default', async () => {
+    const { receivedFix, results } = await runFixGated('package-default');
+    assert.equal(receivedFix, false);
+    assert.equal(results[0].fixSkipped, true);
+  });
+
+  it('applies semantic fix when config source is local', async () => {
+    const { receivedFix, results } = await runFixGated('local');
+    assert.equal(receivedFix, true);
+    assert.equal(results[0].fixSkipped, false);
+  });
+
+  it('still runs preFixCommands when config source is package-default', async () => {
+    let preFixRan = false;
+    const { receivedFix } = await runFixGated('package-default', {
+      preFixCommands() { preFixRan = true; return [{ bin: 'echo', args: ['format'] }]; },
+    });
+    assert.equal(preFixRan, true);
+    assert.equal(receivedFix, false);
+  });
+
+  it('applies semantic fix when config source is user-default', async () => {
+    const { receivedFix, results } = await runFixGated('user-default');
+    assert.equal(receivedFix, true);
+    assert.equal(results[0].fixSkipped, false);
+  });
 });

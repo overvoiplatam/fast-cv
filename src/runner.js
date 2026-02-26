@@ -38,12 +38,17 @@ function spawnAndCollect(bin, args, opts) {
   });
 }
 
-function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false, licenses = false } = {}) {
+function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false, licenses = false, configSource = 'none' } = {}) {
   return new Promise(async (resolve) => {
     const start = Date.now();
 
+    // Semantic fix is gated: shipped defaults only get formatting (preFixCommands), not --fix
+    const effectiveFix = fix && configSource !== 'package-default';
+    const fixSkipped = fix && !effectiveFix;
+
     try {
       // Run preFixCommands sequentially if in fix mode and tool supports them
+      // preFixCommands are pure formatters — always safe regardless of config source
       if (fix && typeof tool.preFixCommands === 'function') {
         const preCmds = tool.preFixCommands(targetDir, configPath, { files });
         for (const cmd of preCmds) {
@@ -54,7 +59,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
         }
       }
 
-      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files, fix, licenses });
+      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files, fix: effectiveFix, licenses });
 
       const result = await spawnAndCollect(bin, args, { cwd, timeout });
 
@@ -66,6 +71,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
           findings: [],
           error: `Timeout after ${(timeout / 1000).toFixed(0)}s`,
           duration,
+          fixSkipped,
         });
         return;
       }
@@ -76,6 +82,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
           findings: [],
           error: `Failed to spawn ${bin}: ${result.spawnError.message}`,
           duration,
+          fixSkipped,
         });
         return;
       }
@@ -87,6 +94,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
           findings,
           error: null,
           duration,
+          fixSkipped,
         });
       } catch (err) {
         resolve({
@@ -94,6 +102,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
           findings: [],
           error: err.message,
           duration,
+          fixSkipped,
         });
       }
     } catch (err) {
@@ -103,6 +112,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
         findings: [],
         error: `Failed to spawn ${tool.name}: ${err.message}`,
         duration,
+        fixSkipped,
       });
     }
   });
@@ -119,7 +129,7 @@ export async function runTools(toolConfigs, targetDir, options = {}) {
   for (const { tool, config } of toolConfigs) {
     if (verbose) process.stderr.write(`  Running ${tool.name}...\n`);
 
-    const result = await runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses });
+    const result = await runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses, configSource: config.source });
 
     if (verbose) {
       const status = result.error

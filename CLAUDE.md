@@ -9,7 +9,7 @@ Node.js ESM, v0.2.0, 3 dependencies, zero build step.
 npm test                              # all tests (node --test)
 node bin/fast-cv.js --tools=eslint .  # self-scan (JS only, fast)
 node bin/fast-cv.js .                 # full scan
-node bin/fast-cv.js --fix .           # auto-fix (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff)
+node bin/fast-cv.js --fix .           # auto-fix (formatting only with shipped defaults; full fix with local config)
 node bin/fast-cv.js --format sarif .  # SARIF output
 node bin/fast-cv.js --git-only .      # scan only git-changed files (uncommitted + unpushed)
 node bin/fast-cv.js --git-only=uncommitted . # scan only uncommitted changes
