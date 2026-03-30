@@ -4,6 +4,7 @@ import { readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SCANNABLE_EXTENSIONS } from '../constants.js';
+import { HARDCODED_IGNORES } from '../pruner.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -23,7 +24,7 @@ export default {
   extensions: [...SCANNABLE_EXTENSIONS],
   installHint: 'npm install -g jscpd',
 
-  buildCommand(targetDir, configPath, { files = [] } = {}) {
+  buildCommand(targetDir, configPath, { files = [], exclude = [] } = {}) {
     const outDir = getTmpDir();
     const args = [
       '--reporters', 'json',
@@ -32,7 +33,19 @@ export default {
       '--min-lines', '5',
       '--absolute',
       '--silent',
+      '--gitignore',
     ];
+
+    // Exclude hardcoded directories (node_modules, dist, build, etc.)
+    for (const dir of HARDCODED_IGNORES) {
+      args.push('--ignore', `**/${dir}/**`);
+    }
+
+    // Exclude user-supplied -x patterns
+    for (const pattern of exclude) {
+      args.push('--ignore', pattern);
+    }
+
     if (configPath) {
       args.push('--config', configPath);
     }
@@ -87,6 +100,7 @@ export default {
         rule: `jscpd/${format}`,
         severity: 'warning',
         message: `Duplicated block (${lines} lines, ${tokens} tokens) — also in ${secondFile.name || 'unknown'}:${secondFile.startLoc?.line || secondFile.start || '?'}`,
+        otherFile: secondFile.name || undefined,
       });
 
       findings.push({
@@ -97,6 +111,7 @@ export default {
         rule: `jscpd/${format}`,
         severity: 'warning',
         message: `Duplicated block (${lines} lines, ${tokens} tokens) — also in ${firstFile.name || 'unknown'}:${firstFile.startLoc?.line || firstFile.start || '?'}`,
+        otherFile: firstFile.name || undefined,
       });
     }
 

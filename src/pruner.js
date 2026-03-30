@@ -5,7 +5,7 @@ import { SCANNABLE_EXTENSIONS } from './constants.js';
 
 // Common build outputs, caches, and dependency directories that should never be scanned.
 // Sourced from GitHub's gitignore templates and major framework documentation.
-const HARDCODED_IGNORES = [
+export const HARDCODED_IGNORES = [
   // Package managers / dependencies
   'node_modules',
   'bower_components',

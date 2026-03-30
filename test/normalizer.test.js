@@ -259,4 +259,36 @@ describe('filterFindings', () => {
     const filtered = runFilter(ig, results, null);
     assert.equal(filtered[0].findings.length, 2);
   });
+
+  it('filters jscpd findings where otherFile is in ignored path', () => {
+    const ig = makeIgnore(['node_modules/']);
+    const results = [{
+      tool: 'jscpd',
+      findings: [
+        { file: 'src/utils.js', line: 10, tag: 'DUPLICATION', rule: 'jscpd/javascript',
+          message: 'Duplicated block — also in node_modules/dep/utils.js:1',
+          otherFile: 'node_modules/dep/utils.js' },
+        { file: 'src/a.js', line: 5, tag: 'DUPLICATION', rule: 'jscpd/javascript',
+          message: 'Duplicated block — also in src/b.js:10',
+          otherFile: 'src/b.js' },
+      ],
+    }];
+    const filtered = runFilter(ig, results);
+    assert.equal(filtered[0].findings.length, 1);
+    assert.equal(filtered[0].findings[0].file, 'src/a.js');
+  });
+
+  it('filters jscpd findings where otherFile is absolute and in ignored path', () => {
+    const ig = makeIgnore(['node_modules/']);
+    const results = [{
+      tool: 'jscpd',
+      findings: [
+        { file: 'src/utils.js', line: 10, tag: 'DUPLICATION', rule: 'jscpd/javascript',
+          message: 'Duplicated block',
+          otherFile: '/tmp/project/node_modules/dep/utils.js' },
+      ],
+    }];
+    const filtered = runFilter(ig, results);
+    assert.equal(filtered[0].findings.length, 0);
+  });
 });

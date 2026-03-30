@@ -174,7 +174,7 @@ export async function run(argv) {
 
         if (verbose) process.stderr.write(`Fixing with ${fixTools.map(t => t.name).join(', ')}...\n`);
         const passFiles = only.length > 0 || exclude.length > 0 || gitFiles !== null;
-        const results = await runTools(fixConfigs, targetDir, { timeout, verbose, files: passFiles ? files : [], fix: true });
+        const results = await runTools(fixConfigs, targetDir, { timeout, verbose, files: passFiles ? files : [], fix: true, exclude });
 
         const warnings = [];
         for (const r of results) {
@@ -200,7 +200,7 @@ export async function run(argv) {
       // Step 5: Run tools sequentially
       if (verbose) process.stderr.write(`Running ${readyTools.map(t => t.name).join(', ')}...\n`);
       const passFiles = only.length > 0 || exclude.length > 0 || gitFiles !== null;
-      const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files: passFiles ? files : [], licenses });
+      const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files: passFiles ? files : [], licenses, exclude });
 
       // Step 5b: Built-in line-count check
       if (maxLines > 0) {

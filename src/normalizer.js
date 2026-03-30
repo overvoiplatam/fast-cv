@@ -10,6 +10,11 @@ export function filterFindings(results, targetDir, ignoreFilter, onlyFilter) {
       if (ignoreFilter.ignores(relPath)) return false;
       // If --only is active, strip findings outside the inclusion set
       if (onlyFilter && !onlyFilter.includes(relPath)) return false;
+      // For cross-file tools (jscpd): also filter if the paired file is ignored
+      if (f.otherFile) {
+        const otherRel = isAbsolute(f.otherFile) ? relative(targetDir, f.otherFile) : f.otherFile;
+        if (ignoreFilter.ignores(otherRel)) return false;
+      }
       return true;
     });
 

@@ -41,6 +41,23 @@ describe('jscpd adapter', () => {
     assert.ok(args.includes('/tmp/project'));
   });
 
+  it('includes --gitignore and hardcoded ignore patterns', () => {
+    const { args } = jscpd.buildCommand('/tmp/project', null);
+    assert.ok(args.includes('--gitignore'));
+    // Collect all --ignore values
+    const ignoreValues = args.filter((a, i) => i > 0 && args[i - 1] === '--ignore');
+    assert.ok(ignoreValues.some(p => p.includes('node_modules')));
+    assert.ok(ignoreValues.some(p => p.includes('dist')));
+    assert.ok(ignoreValues.some(p => p.includes('.venv')));
+  });
+
+  it('passes user exclude patterns as --ignore', () => {
+    const { args } = jscpd.buildCommand('/tmp/project', null, { exclude: ['**/vendor/**', 'tmp/'] });
+    const ignoreValues = args.filter((a, i) => i > 0 && args[i - 1] === '--ignore');
+    assert.ok(ignoreValues.includes('**/vendor/**'));
+    assert.ok(ignoreValues.includes('tmp/'));
+  });
+
   it('parses duplicates from report file', () => {
     // Create a temp report file
     const tmpDir = join(tmpdir(), `fcv-jscpd-test-${Date.now()}`);

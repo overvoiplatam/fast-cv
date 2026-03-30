@@ -38,7 +38,7 @@ function spawnAndCollect(bin, args, opts) {
   });
 }
 
-function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false, licenses = false, configSource = 'none' } = {}) {
+function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false, licenses = false, configSource = 'none', exclude = [] } = {}) {
   return new Promise(async (resolve) => {
     const start = Date.now();
 
@@ -59,7 +59,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
         }
       }
 
-      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files, fix: effectiveFix, licenses });
+      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files, fix: effectiveFix, licenses, exclude });
 
       const result = await spawnAndCollect(bin, args, { cwd, timeout });
 
@@ -124,12 +124,13 @@ export async function runTools(toolConfigs, targetDir, options = {}) {
   const fix = options.fix || false;
   const licenses = options.licenses || false;
   const verbose = options.verbose || false;
+  const exclude = options.exclude || [];
 
   const results = [];
   for (const { tool, config } of toolConfigs) {
     if (verbose) process.stderr.write(`  Running ${tool.name}...\n`);
 
-    const result = await runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses, configSource: config.source });
+    const result = await runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses, configSource: config.source, exclude });
 
     if (verbose) {
       const status = result.error
