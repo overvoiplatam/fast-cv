@@ -22,7 +22,7 @@ export function filterFindings(results, targetDir, ignoreFilter, onlyFilter) {
   });
 }
 
-export function formatReport({ targetDir, results, warnings = [], fix = false }) {
+export function formatReport({ targetDir, results, warnings = [], fix = false, fileCount = 0 }) {
   const lines = [];
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 
@@ -38,6 +38,9 @@ export function formatReport({ targetDir, results, warnings = [], fix = false })
   lines.push('');
   lines.push(`**Target**: \`${targetDir}\``);
   lines.push(`**Date**: ${now}`);
+  if (fileCount > 0) {
+    lines.push(`**Files**: ${fileCount}`);
+  }
   if (toolSummaries.length > 0) {
     lines.push(`**Tools**: ${toolSummaries.join(', ')}`);
   }
@@ -101,7 +104,8 @@ export function formatReport({ targetDir, results, warnings = [], fix = false })
   lines.push('---');
   lines.push('');
   const toolCount = results.filter(r => !r.error).length;
-  lines.push(`*${allFindings.length} finding${allFindings.length !== 1 ? 's' : ''} from ${toolCount} tool${toolCount !== 1 ? 's' : ''} in ${(totalDuration / 1000).toFixed(1)}s*`);
+  const filePart = fileCount > 0 ? ` across ${fileCount} file${fileCount !== 1 ? 's' : ''}` : '';
+  lines.push(`*${allFindings.length} finding${allFindings.length !== 1 ? 's' : ''} from ${toolCount} tool${toolCount !== 1 ? 's' : ''}${filePart} in ${(totalDuration / 1000).toFixed(1)}s*`);
   lines.push('');
 
   return lines.join('\n');

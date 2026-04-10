@@ -21,7 +21,7 @@ export async function run(argv) {
   program
     .name('fast-cv')
     .description('Fast Code Validation — sequential linters & security scanners with unified Markdown reports')
-    .version('0.2.0')
+    .version('0.2.1')
     .argument('[directory]', 'target directory to scan', '.')
     .option('-t, --timeout <seconds>', 'per-tool timeout in seconds', '120')
     .option('--tools <names>', 'comma-separated list of tools to run (default: all applicable)')
@@ -220,7 +220,7 @@ export async function run(argv) {
 
       // Step 7: Format and output report
       const warnings = precheckResult.warnings || [];
-      const report = fmt({ targetDir, results: filtered, warnings });
+      const report = fmt({ targetDir, results: filtered, warnings, fileCount: files.length });
       process.stdout.write(report);
 
       const hasFindings = filtered.some(r => r.findings && r.findings.length > 0);
