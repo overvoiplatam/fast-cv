@@ -1,0 +1,68 @@
+# fast-cv — Gitea/GitHub Actions workflow
+# Runs fast-cv code validation on push and pull requests.
+# Works with both Gitea Actions and GitHub Actions (same syntax).
+#
+# Usage: copy this file to .gitea/workflows/fast-cv.yml (Gitea)
+#        or .github/workflows/fast-cv.yml (GitHub)
+
+name: Code Validation (fast-cv)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install fast-cv (app + all tools + configs)
+        run: |
+          curl -sfL https://raw.githubusercontent.com/overvoiplatam/fast-cv/main/install.sh | bash -s -- --mode all
+          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+
+      - name: Run fast-cv
+        run: fast-cv .
+
+  # ─── Customization examples ───────────────────────────────────────
+  #
+  # Scan only specific tools (faster CI):
+  #   run: fast-cv --tools=eslint,ruff .
+  #
+  # Scan only files changed in this PR/push:
+  #   run: fast-cv --git-only .
+  #
+  # Auto-fix formatting before validation:
+  #   run: fast-cv --fix . && fast-cv .
+  #
+  # SARIF output (for GitHub Code Scanning integration):
+  #   run: fast-cv --format sarif . > results.sarif
+  #
+  # Custom file length threshold:
+  #   run: fast-cv --max-lines=400 .
+  #
+  # Suppress documentation findings:
+  #   run: fast-cv --no-docstring .
+  #
+  # Verbose output for debugging CI issues:
+  #   run: fast-cv --verbose .
+  #
+  # Exclude paths:
+  #   run: fast-cv --exclude "vendor/**,dist/**" .
+  #
+  # Scan only specific paths:
+  #   run: fast-cv --only "src/**,lib/**" .
