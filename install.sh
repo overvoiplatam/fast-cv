@@ -226,10 +226,11 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
       || warn "Failed to install eslint"
   fi
 
-  # eslint plugins — always ensure they're installed (even if eslint was already present)
-  ESLINT_PLUGINS="eslint-plugin-sonarjs eslint-plugin-security typescript-eslint eslint-plugin-react eslint-plugin-react-hooks eslint-plugin-vue eslint-plugin-svelte eslint-plugin-jsonc"
-  info "Ensuring eslint plugins are installed..."
-  install_npm_global ${ESLINT_PLUGINS} \
+  # eslint plugins — install into fast-cv's own node_modules/ so the shipped config can find them
+  # (global npm packages are NOT in Node's resolution chain for the config file)
+  ESLINT_PLUGINS="eslint-plugin-sonarjs eslint-plugin-security typescript-eslint eslint-plugin-react eslint-plugin-react-hooks eslint-plugin-vue eslint-plugin-svelte eslint-plugin-jsonc eslint-plugin-jsdoc"
+  info "Installing eslint plugins into fast-cv node_modules..."
+  (cd "${SCRIPT_DIR}" && npm install --no-save ${ESLINT_PLUGINS} 2>/dev/null) \
     && ok "eslint plugins installed" \
     || warn "Failed to install some eslint plugins (eslint will degrade gracefully)"
 
@@ -297,11 +298,16 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
   if command -v stylelint &>/dev/null; then
     ok "stylelint already installed: $(stylelint --version 2>/dev/null || echo 'version unknown')"
   else
-    info "Installing stylelint + stylelint-config-standard..."
-    install_npm_global stylelint stylelint-config-standard \
+    info "Installing stylelint..."
+    install_npm_global stylelint \
       && ok "stylelint installed" \
       || warn "Failed to install stylelint"
   fi
+  # stylelint-config-standard — install into fast-cv's node_modules/ for config resolution
+  info "Installing stylelint-config-standard into fast-cv node_modules..."
+  (cd "${SCRIPT_DIR}" && npm install --no-save stylelint-config-standard 2>/dev/null) \
+    && ok "stylelint-config-standard installed" \
+    || warn "Failed to install stylelint-config-standard"
 
   # sqlfluff (Python — SQL linter)
   if command -v sqlfluff &>/dev/null; then

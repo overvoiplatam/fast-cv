@@ -19,13 +19,19 @@ const svelte = await tryImport("eslint-plugin-svelte");
 const jsonc = await tryImport("eslint-plugin-jsonc");
 const jsdoc = await tryImport("eslint-plugin-jsdoc");
 
+// When typescript-eslint isn't available, exclude TS files from patterns
+// to avoid parse errors from the default JS parser
+const jsFiles = ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx"];
+const tsFiles = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
+const codeFiles = tseslint ? [...jsFiles, ...tsFiles] : jsFiles;
+
 const config = [
   // ─── sonarjs recommended (JS + TS) ─────────────────────────────────
   ...(sonarjs?.configs?.recommended ? [sonarjs.configs.recommended] : []),
 
   // ─── Base rules (JS + TS) ──────────────────────────────────────────
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+    files: codeFiles,
     ...(sonarjs ? { plugins: { sonarjs } } : {}),
     languageOptions: {
       ecmaVersion: "latest",
@@ -57,7 +63,7 @@ const config = [
 
   // ─── eslint-plugin-security ────────────────────────────────────────
   ...(security ? [{
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+    files: codeFiles,
     plugins: { security },
     rules: security.configs?.recommended?.rules ?? {
       "security/detect-buffer-noassert": "warn",
@@ -113,7 +119,7 @@ const config = [
 
   // ─── JSDoc (eslint-plugin-jsdoc) ──────────────────────────────────
   ...(jsdoc ? [{
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+    files: codeFiles,
     plugins: { jsdoc },
     rules: {
       "jsdoc/require-jsdoc": ["warn", {
