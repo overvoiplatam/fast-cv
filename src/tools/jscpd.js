@@ -37,8 +37,10 @@ export default {
     ];
 
     // Exclude hardcoded directories (node_modules, dist, build, etc.)
+    // Use both relative and absolute patterns for compatibility with --absolute mode
     for (const dir of HARDCODED_IGNORES) {
       args.push('--ignore', `**/${dir}/**`);
+      args.push('--ignore', `${targetDir}/**/${dir}/**`);
     }
 
     // Exclude user-supplied -x patterns
