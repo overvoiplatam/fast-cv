@@ -9,7 +9,13 @@
   "scripts": {
     "test": "node --test test/*.test.js test/tools/*.test.js"
   },
-  "keywords": ["linter", "security", "scanner", "cli", "code-quality"],
+  "keywords": [
+    "linter",
+    "security",
+    "scanner",
+    "cli",
+    "code-quality"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -25,6 +31,6 @@
   "dependencies": {
     "commander": "^12.1.0",
     "ignore": "^6.0.2",
-    "yaml": "^2.6.1"
+    "yaml": "^2.8.3"
   }
 }

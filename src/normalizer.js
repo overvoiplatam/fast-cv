@@ -21,6 +21,15 @@ export function filterFindings(results, targetDir, ignoreFilter, onlyFilter, { v
 
     if (verbose && filtered.length < before) {
       process.stderr.write(`  ${result.tool}: ${before} found → ${filtered.length} after filter (${before - filtered.length} ignored)\n`);
+      // Show sample filtered paths for debugging
+      const dropped = result.findings.filter(f => !filtered.includes(f));
+      const samples = dropped.slice(0, 3).map(f => {
+        const rel = isAbsolute(f.file) ? relative(targetDir, f.file) : f.file;
+        return `    - ${rel}`;
+      });
+      if (samples.length > 0) {
+        process.stderr.write(samples.join('\n') + '\n');
+      }
     }
 
     return { ...result, findings: filtered };
