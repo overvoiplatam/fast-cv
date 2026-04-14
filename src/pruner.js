@@ -122,7 +122,6 @@ export async function createIgnoreFilter(targetDir, { exclude = [] } = {}) {
 
   // Add hardcoded directory ignores
   ig.add(HARDCODED_IGNORES.map(d => `${d}/`));
-  ig.add(IGNORED_FILES);
 
   // Add user-supplied --exclude patterns
   if (exclude.length > 0) ig.add(exclude);
@@ -138,6 +137,8 @@ export async function createIgnoreFilter(targetDir, { exclude = [] } = {}) {
   return ig;
 }
 
+const IGNORED_FILES_SET = new Set(IGNORED_FILES);
+
 export async function pruneDirectory(targetDir, { exclude = [], only = [], gitFiles = null } = {}) {
   const ignoreFilter = await createIgnoreFilter(targetDir, { exclude });
   const onlyFilter = createOnlyFilter(only);
@@ -150,6 +151,9 @@ export async function pruneDirectory(targetDir, { exclude = [], only = [], gitFi
 
   for (const entry of entries) {
     if (!entry.isFile()) continue;
+
+    // Skip lockfiles (pruning only — not applied to tool findings)
+    if (IGNORED_FILES_SET.has(entry.name)) continue;
 
     const fullPath = join(entry.parentPath || entry.path, entry.name);
     const relPath = relative(targetDir, fullPath);

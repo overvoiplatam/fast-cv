@@ -209,7 +209,7 @@ export async function run(argv) {
       }
 
       // Step 6: Post-filter findings through ignore rules
-      const filtered = filterFindings(results, targetDir, ignoreFilter, onlyFilter);
+      const filtered = filterFindings(results, targetDir, ignoreFilter, onlyFilter, { verbose });
 
       // Step 6b: Suppress DOCS findings if --no-docstring
       if (options.noDocstring) {

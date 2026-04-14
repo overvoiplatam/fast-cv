@@ -31,7 +31,10 @@ export default {
 
     let data;
     try {
-      data = JSON.parse(stdout);
+      // Strip non-JSON prefix (e.g. Svelte config warnings printed before JSON)
+      const jsonStart = stdout.indexOf('{');
+      const raw = jsonStart > 0 ? stdout.slice(jsonStart) : stdout;
+      data = JSON.parse(raw);
     } catch {
       throw new Error(`knip: failed to parse JSON output: ${stdout.slice(0, 200)}`);
     }

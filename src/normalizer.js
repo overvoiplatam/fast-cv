@@ -1,10 +1,11 @@
 import { relative, isAbsolute } from 'node:path';
 import { collectFindings } from './findings.js';
 
-export function filterFindings(results, targetDir, ignoreFilter, onlyFilter) {
+export function filterFindings(results, targetDir, ignoreFilter, onlyFilter, { verbose = false } = {}) {
   return results.map(result => {
     if (result.error || !result.findings || result.findings.length === 0) return result;
 
+    const before = result.findings.length;
     const filtered = result.findings.filter(f => {
       const relPath = isAbsolute(f.file) ? relative(targetDir, f.file) : f.file;
       if (ignoreFilter.ignores(relPath)) return false;
@@ -17,6 +18,10 @@ export function filterFindings(results, targetDir, ignoreFilter, onlyFilter) {
       }
       return true;
     });
+
+    if (verbose && filtered.length < before) {
+      process.stderr.write(`  ${result.tool}: ${before} found → ${filtered.length} after filter (${before - filtered.length} ignored)\n`);
+    }
 
     return { ...result, findings: filtered };
   });

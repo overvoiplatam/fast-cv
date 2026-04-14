@@ -229,10 +229,12 @@ describe('createIgnoreFilter', () => {
     assert.ok(ig.ignores('dist/bundle.js'));
   });
 
-  it('ignores lock files', async () => {
+  it('does not ignore lock files in filter (handled by pruneDirectory instead)', async () => {
+    // Lock files are filtered in pruneDirectory by filename, not in ignoreFilter,
+    // so that tool findings referencing lockfiles (e.g. trivy) are not stripped
     const ig = await createIgnoreFilter(tmpDir);
-    assert.ok(ig.ignores('package-lock.json'));
-    assert.ok(ig.ignores('yarn.lock'));
+    assert.ok(!ig.ignores('package-lock.json'));
+    assert.ok(!ig.ignores('yarn.lock'));
   });
 
   it('does not ignore normal source files', async () => {
