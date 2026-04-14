@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFileSync, mkdirSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SCANNABLE_EXTENSIONS } from '../constants.js';
@@ -26,28 +26,29 @@ export default {
 
   buildCommand(targetDir, configPath, { files = [], exclude = [] } = {}) {
     const outDir = getTmpDir();
+
+    // Generate temp config with ignore patterns (jscpd's --ignore CLI flag
+    // only accepts a single pattern; config file handles arrays properly)
+    if (!configPath) {
+      const ignorePatterns = HARDCODED_IGNORES.map(d => `**/${d}/**`);
+      for (const pattern of exclude) ignorePatterns.push(pattern);
+      const tmpConfig = join(outDir, '.jscpd.json');
+      writeFileSync(tmpConfig, JSON.stringify({
+        minTokens: 50,
+        minLines: 5,
+        ignore: ignorePatterns,
+      }));
+      configPath = tmpConfig;
+    }
+
     const args = [
       '--reporters', 'json',
       '--output', outDir,
-      '--min-tokens', '50',
-      '--min-lines', '5',
       '--silent',
       '--gitignore',
+      '--config', configPath,
     ];
 
-    // Exclude hardcoded directories (node_modules, dist, build, etc.)
-    for (const dir of HARDCODED_IGNORES) {
-      args.push('--ignore', `**/${dir}/**`);
-    }
-
-    // Exclude user-supplied -x patterns
-    for (const pattern of exclude) {
-      args.push('--ignore', pattern);
-    }
-
-    if (configPath) {
-      args.push('--config', configPath);
-    }
     // jscpd is cross-file — always scan whole directory regardless of files
     args.push(targetDir);
     return { bin: 'jscpd', args, cwd: targetDir };

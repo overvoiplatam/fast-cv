@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import jscpd from '../../src/tools/jscpd.js';
@@ -15,18 +15,15 @@ describe('jscpd adapter', () => {
     assert.ok(jscpd.installHint.includes('jscpd'));
   });
 
-  it('builds command without config', () => {
+  it('builds command without config (generates temp config with ignores)', () => {
     const { bin, args } = jscpd.buildCommand('/tmp/project', null);
     assert.equal(bin, 'jscpd');
     assert.ok(args.includes('--reporters'));
     assert.ok(args.includes('json'));
-    assert.ok(args.includes('--min-tokens'));
-    assert.ok(args.includes('50'));
-    assert.ok(args.includes('--min-lines'));
-    assert.ok(args.includes('5'));
     assert.ok(args.includes('--silent'));
     assert.ok(args.includes('/tmp/project'));
-    assert.ok(!args.includes('--config'));
+    // When no config provided, a temp config is generated with ignore patterns
+    assert.ok(args.includes('--config'));
   });
 
   it('builds command with config', () => {
@@ -40,21 +37,25 @@ describe('jscpd adapter', () => {
     assert.ok(args.includes('/tmp/project'));
   });
 
-  it('includes --gitignore and hardcoded ignore patterns', () => {
+  it('includes --gitignore and generates config with hardcoded ignore patterns', () => {
     const { args } = jscpd.buildCommand('/tmp/project', null);
     assert.ok(args.includes('--gitignore'));
-    // Collect all --ignore values
-    const ignoreValues = args.filter((a, i) => i > 0 && args[i - 1] === '--ignore');
-    assert.ok(ignoreValues.some(p => p.includes('node_modules')));
-    assert.ok(ignoreValues.some(p => p.includes('dist')));
-    assert.ok(ignoreValues.some(p => p.includes('.venv')));
+    // Ignores are in the generated temp config, not CLI args
+    const configIdx = args.indexOf('--config');
+    assert.ok(configIdx >= 0);
+    const configPath = args[configIdx + 1];
+    const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    assert.ok(config.ignore.some(p => p.includes('node_modules')));
+    assert.ok(config.ignore.some(p => p.includes('dist')));
+    assert.ok(config.ignore.some(p => p.includes('.venv')));
   });
 
-  it('passes user exclude patterns as --ignore', () => {
+  it('includes user exclude patterns in generated config', () => {
     const { args } = jscpd.buildCommand('/tmp/project', null, { exclude: ['**/vendor/**', 'tmp/'] });
-    const ignoreValues = args.filter((a, i) => i > 0 && args[i - 1] === '--ignore');
-    assert.ok(ignoreValues.includes('**/vendor/**'));
-    assert.ok(ignoreValues.includes('tmp/'));
+    const configIdx = args.indexOf('--config');
+    const config = JSON.parse(readFileSync(args[configIdx + 1], 'utf-8'));
+    assert.ok(config.ignore.includes('**/vendor/**'));
+    assert.ok(config.ignore.includes('tmp/'));
   });
 
   it('parses duplicates from report file', () => {
