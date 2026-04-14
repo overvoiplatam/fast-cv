@@ -31,7 +31,6 @@ export default {
       '--output', outDir,
       '--min-tokens', '50',
       '--min-lines', '5',
-      '--absolute',
       '--silent',
       '--gitignore',
     ];

@@ -24,7 +24,6 @@ describe('jscpd adapter', () => {
     assert.ok(args.includes('50'));
     assert.ok(args.includes('--min-lines'));
     assert.ok(args.includes('5'));
-    assert.ok(args.includes('--absolute'));
     assert.ok(args.includes('--silent'));
     assert.ok(args.includes('/tmp/project'));
     assert.ok(!args.includes('--config'));
