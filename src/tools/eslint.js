@@ -1,6 +1,5 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { HARDCODED_IGNORES } from '../pruner.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -83,10 +82,6 @@ export default {
     if (files.length > 0) {
       args.push(...files);
     } else {
-      // Scanning whole directory — exclude build artifacts, caches, deps
-      for (const dir of HARDCODED_IGNORES) {
-        args.push('--ignore-pattern', `**/${dir}/**`);
-      }
       args.push(targetDir);
     }
     return { bin: 'eslint', args, cwd: targetDir };
