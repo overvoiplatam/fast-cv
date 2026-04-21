@@ -2,10 +2,12 @@
 
 A local, offline CLI tool that orchestrates multiple linters and security scanners sequentially, producing a unified tagged Markdown report optimized for LLM/AI agent consumption.
 
+> Version history and breaking changes live in [CHANGELOG.md](CHANGELOG.md).
+
 ## Supported Tools
 
 | Tool | Languages | Tags |
-|------|-----------|------|
+| ------ | ----------- | ------ |
 | [ruff](https://github.com/astral-sh/ruff) | Python | `[LINTER]` `[FORMAT]` `[SECURITY]` `[REFACTOR]` `[BUG]` `[DOCS]` |
 | [eslint](https://eslint.org) + [security](https://github.com/eslint-community/eslint-plugin-security) + [sonarjs](https://github.com/SonarSource/eslint-plugin-sonarjs) | JS, TS, JSX, TSX | `[LINTER]` `[SECURITY]` `[REFACTOR]` `[BUG]` |
 | [semgrep](https://semgrep.dev) | Python, JS, TS, Go, Java, Ruby, PHP, Rust, C/C++, C#, Kotlin, Swift, Scala | `[SECURITY]` `[BUG]` (OWASP Top 10 + custom taint rules) |
@@ -29,7 +31,7 @@ Tools are automatically selected based on detected file types. Missing tools are
 What fast-cv checks per language. Columns use checkmarks for clarity; tool names shown where only one tool applies.
 
 | Language | Linting | SAST | SCA | Types | Privacy | Dead Code | Duplication | Typos\* | Secrets/IaC |
-|----------|:-------:|:----:|:---:|:-----:|:-------:|:---------:|:-----------:|:-------:|:-----------:|
+| ---------- | :-------: | :----: | :---: | :-----: | :-------: | :---------: | :-----------: | :-------: | :-----------: |
 | **Python** | ruff | semgrep | trivy | mypy | bearer | vulture | jscpd | typos | trivy |
 | **JavaScript** | eslint | semgrep | trivy | — | bearer | knip | jscpd | typos | trivy |
 | **TypeScript** | eslint | semgrep | trivy | tsc | bearer | knip | jscpd | typos | trivy |
@@ -55,7 +57,7 @@ What fast-cv checks per language. Columns use checkmarks for clarity; tool names
 fast-cv implements a five-pillar security model that provides bank-grade coverage across different vulnerability classes:
 
 | Pillar | Tool | What it catches | Tag |
-|--------|------|----------------|-----|
+| -------- | ------ | ---------------- | ----- |
 | **SAST** (Static Analysis) | Semgrep (OWASP Top 10 + custom taint rules) | SQL injection, XSS, SSRF, broken auth, insecure deserialization | `[SECURITY]` |
 | **SCA** (Software Composition) | Trivy | CVEs in dependencies (requirements.txt, package-lock.json, go.sum) | `[DEPENDENCY]` |
 | **IaC** (Infrastructure as Code) | Trivy | Dockerfile misconfigs, privileged containers, Terraform issues | `[INFRA]` |
@@ -65,7 +67,7 @@ fast-cv implements a five-pillar security model that provides bank-grade coverag
 ### Offline-first design
 
 - **Semgrep OWASP rules**: The full [OWASP Top 10](https://semgrep.dev/p/owasp-top-ten) ruleset (~543 rules) is downloaded once during `./install.sh` and stored at `~/.config/fast-cv/defaults/semgrep/owasp-top-ten.yaml`. After install, all SAST scanning is fully offline. Custom taint rules (`taint.yaml`) are shipped alongside.
-- **Trivy CVE database**: Auto-updates every 6 hours on first run, then all SCA/IaC/secret scanning is fully offline.
+- **Trivy databases**: `install.sh --mode all` installs Trivy and refreshes the vulnerability and Java databases up front, so the first default scan uses a current cached baseline. Runtime scans use cached/offline mode by default for repeatability; run `fast-cv --update-db .` when a validation job should refresh Trivy databases before scanning.
 
 ## Install
 
@@ -92,13 +94,13 @@ When a previous installation is detected, the installer prompts you to choose:
 ### Requirements
 
 - Node.js >= 20
-- npm
+- npm (for eslint, jscpd, knip, tsc, stylelint, and plugins)
 - git
-- python3 + pip3 (for ruff, semgrep, mypy, vulture)
-- curl (for bearer, golangci-lint, trivy installers + OWASP rules download)
-- cargo (optional, for typos-cli)
-- Rust toolchain with clippy (optional, for clippy: `rustup component add clippy`)
-- npx (for knip, included with Node.js)
+- python3 plus pipx, uv, or pip3 (for ruff, semgrep, mypy, vulture, sqlfluff)
+- curl (for bearer, golangci-lint, trivy installers, typos fallback, and OWASP rules download)
+- Rust toolchain/rustup (optional, for typos-cli and clippy: `rustup component add clippy`)
+
+`install.sh --mode all` attempts to install every supported tool so the same CI image or developer machine can validate many project types. Tools that cannot be installed are reported as warnings; coverage is reduced until they are installed.
 
 ## Usage
 
@@ -109,14 +111,15 @@ fast-cv [directory] [options]
 ### Options
 
 | Flag | Description | Default |
-|------|-------------|---------|
-| `-t, --timeout <seconds>` | Per-tool timeout | `120` |
+| ------ | ------------- | --------- |
+| `-t, --timeout <seconds>` | Optional per-tool timeout guardrail | disabled |
 | `--tools <names>` | Comma-separated tool list | all applicable |
 | `-f, --format <type>` | Output format (`markdown` or `sarif`) | `markdown` |
 | `-x, --exclude <patterns>` | Comma-separated ignore patterns (gitignore syntax) | none |
 | `--only <patterns>` | Comma-separated file paths or glob patterns to scan exclusively | none |
 | `--fix` | Auto-fix formatting/style issues where supported | `false` |
 | `--licenses` | Include open-source license compliance scanning (trivy) | `false` |
+| `--update-db` | Refresh external scanner databases before scanning (currently trivy) | `false` |
 | `--sbom` | Generate CycloneDX SBOM inventory to stdout (requires trivy) | `false` |
 | `--max-lines <number>` | Flag files exceeding this line count (0 to disable) | `600` |
 | `--max-lines-omit <patterns>` | Comma-separated patterns to exclude from line count check (gitignore syntax) | none |
@@ -150,8 +153,12 @@ fast-cv --format sarif . | jq .
 # Auto-install any missing tools, then scan
 fast-cv . --auto-install
 
-# 30-second timeout per tool, verbose
-fast-cv . --timeout 30 -v
+# Optional 300-second timeout guardrail, verbose
+fast-cv . --timeout 300 -v
+
+# Refresh trivy databases before scanning
+fast-cv --update-db .
+fast-cv --update-db --tools=trivy .
 
 # Exclude extra directories/files (gitignore pattern syntax)
 fast-cv . --exclude ".svelte-kit/,config.js,**/generated/"
@@ -220,7 +227,7 @@ fast-cv --fix --only="src/utils.py" .
 Fix support varies by tool:
 
 | Tool | Fix behavior |
-|------|-------------|
+| ------ | ------------- |
 | **ruff** | Two-step: runs `ruff format` first (whitespace, quotes, imports), then `ruff check --fix` (safe auto-fixes). Reports remaining issues. Includes pydocstyle `D` rules for docstring checks. |
 | **eslint** | Adds `--fix` to the scan command. Applies fixes and reports remaining in one pass. |
 | **golangci-lint** | Adds `--fix` to the scan command (limited support). |
@@ -254,7 +261,7 @@ fast-cv --format sarif . > results.sarif
 fast-cv --format sarif . | jq '.runs[0].results | length'
 ```
 
-SARIF output includes rule deduplication, tag-to-level mapping (error/warning/note), source tool attribution, and run-level metadata (duration, warnings, fix mode).
+SARIF output includes rule deduplication, tag-to-level mapping (error/warning/note), source tool attribution, and run-level metadata (duration, warnings, tool errors, fix mode).
 
 ## `install-hook` Command
 
@@ -271,11 +278,17 @@ fast-cv install-hook /path/to/project
 fast-cv install-hook --force
 ```
 
-The hook runs `fast-cv . --timeout 60` and blocks the commit if issues are found. To bypass the hook temporarily:
+The hook runs `fast-cv .` and blocks the commit if issues are found or validation cannot complete. To bypass the hook temporarily:
 
 ```bash
 git commit --no-verify
 ```
+
+## CI/CD
+
+A ready-to-use workflow lives at [`examples/gitea-action.yml`](examples/gitea-action.yml). The syntax is identical for Gitea Actions and GitHub Actions — copy it to `.gitea/workflows/fast-cv.yml` or `.github/workflows/fast-cv.yml`.
+
+The workflow installs fast-cv via `install.sh --mode all` and runs `fast-cv .` on push and pull request. Inline comments cover common customizations: `--tools`, `--git-only`, `--fix`, `--format sarif`, `--timeout`, `--update-db`, `--max-lines`, `--no-docstring`, `--exclude`, and `--only`.
 
 ## Output Format
 
@@ -324,13 +337,13 @@ fast-cv produces tagged Markdown grouped by file:
 
 ---
 
-*16 findings from 9 tools in 7.4s*
+*16 findings from 9 completed tools in 7.4s*
 ```
 
 ### Tags
 
 | Tag | Meaning |
-|-----|---------|
+| ----- | --------- |
 | `[SECURITY]` | Security vulnerability or risky pattern |
 | `[BUG]` | Likely bug or correctness issue |
 | `[REFACTOR]` | Complexity, maintainability, or code smell |
@@ -350,10 +363,10 @@ fast-cv produces tagged Markdown grouped by file:
 ### Exit Codes
 
 | Code | Meaning |
-|------|---------|
-| `0` | Clean — no findings |
-| `1` | Findings exist |
-| `2` | Precheck failed (missing tools) |
+| ------ | --------- |
+| `0` | Clean — no findings and all selected tools completed |
+| `1` | Code findings exist |
+| `2` | Validation could not complete (bad target, precheck failure, tool runtime error, timeout, parse error, stale/missing scanner database) |
 
 ## Configuration
 
@@ -397,7 +410,7 @@ Ignore sources (merged together, first match wins):
 When a finding is intentional (e.g. a webhook field name dictated by an external API), suppress it inline:
 
 | Tool | Suppress syntax |
-|------|----------------|
+| ------ | ---------------- |
 | **ruff** | `# noqa: E501` (specific rule) or `# noqa` (all rules on line) |
 | **eslint** | `// eslint-disable-next-line no-eval` |
 | **semgrep** | `// nosemgrep: rule-id` or `# nosemgrep` |
@@ -422,7 +435,7 @@ npm test
 node --test test/pruner.test.js
 
 # Self-scan
-node bin/fast-cv.js .
+node bin/fast-cv.js --tools=eslint .
 
 # Test --only flag
 node bin/fast-cv.js --only="src/tools/eslint.js" .
@@ -446,6 +459,9 @@ node bin/fast-cv.js --tools=knip .
 
 # Test license scanning
 node bin/fast-cv.js --licenses --tools=trivy .
+
+# Refresh trivy databases during validation
+node bin/fast-cv.js --update-db --tools=trivy .
 
 # Generate SBOM
 node bin/fast-cv.js --sbom . | python3 -m json.tool

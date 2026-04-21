@@ -10,10 +10,17 @@ import { formatSarif } from './sarif.js';
 import { tools as allTools } from './tools/index.js';
 import { checkFileLines } from './line-check.js';
 import { getGitChangedFiles } from './git-changes.js';
+import { VERSION } from './version.js';
 
 const EXIT_CLEAN = 0;
 const EXIT_FINDINGS = 1;
 const EXIT_PRECHECK_FAILED = 2;
+
+export function getScanExitCode(results) {
+  if (results.some(r => r.error)) return EXIT_PRECHECK_FAILED;
+  if (results.some(r => r.findings && r.findings.length > 0)) return EXIT_FINDINGS;
+  return EXIT_CLEAN;
+}
 
 export async function run(argv) {
   const program = new Command();
@@ -21,9 +28,9 @@ export async function run(argv) {
   program
     .name('fast-cv')
     .description('Fast Code Validation — sequential linters & security scanners with unified Markdown reports')
-    .version('0.2.1')
+    .version(VERSION)
     .argument('[directory]', 'target directory to scan', '.')
-    .option('-t, --timeout <seconds>', 'per-tool timeout in seconds', '120')
+    .option('-t, --timeout <seconds>', 'per-tool timeout in seconds (disabled by default)')
     .option('--tools <names>', 'comma-separated list of tools to run (default: all applicable)')
     .option('-v, --verbose', 'show detailed output on stderr', false)
     .option('--auto-install', 'automatically install missing tools', false)
@@ -31,6 +38,7 @@ export async function run(argv) {
     .option('--only <patterns>', 'comma-separated file paths or glob patterns to scan exclusively', '')
     .option('--fix', 'auto-fix formatting/style issues where supported', false)
     .option('--licenses', 'include open-source license compliance scanning (trivy)', false)
+    .option('--update-db', 'allow tools with external databases to refresh them before scanning (currently trivy)', false)
     .option('--sbom', 'generate CycloneDX SBOM inventory (requires trivy)', false)
     .option('--max-lines <number>', 'flag files exceeding this line count (0 to disable)', '600')
     .option('--max-lines-omit <patterns>', 'comma-separated patterns to exclude from line count check (gitignore syntax)', '')
@@ -56,21 +64,38 @@ export async function run(argv) {
           process.exit(EXIT_PRECHECK_FAILED);
         }
         const { spawn: spawnProc } = await import('node:child_process');
-        const proc = spawnProc('trivy', ['fs', '--format', 'cyclonedx', '--quiet', targetDir],
-          { stdio: ['ignore', 'pipe', 'pipe'] });
+        const trivyArgs = [
+          'fs',
+          '--format', 'cyclonedx',
+          '--quiet',
+        ];
+        if (!options.updateDb) {
+          trivyArgs.push(
+            '--offline-scan',
+            '--skip-db-update',
+            '--skip-java-db-update',
+            '--skip-check-update',
+            '--skip-vex-repo-update',
+          );
+        }
+        trivyArgs.push(targetDir);
+        const proc = spawnProc('trivy', trivyArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
         let stdout = '', stderr = '';
         proc.stdout.on('data', c => { stdout += c; });
         proc.stderr.on('data', c => { stderr += c; });
         await new Promise(r => proc.on('close', r));
         if (!stdout.trim()) {
-          process.stderr.write(`trivy SBOM error: ${stderr.slice(0, 500)}\n`);
+          const updateAdvice = /db|database|metadata|cache|download|update/i.test(stderr)
+            ? ' Run fast-cv with --update-db --sbom . to refresh the trivy databases before generating the SBOM.'
+            : '';
+          process.stderr.write(`trivy SBOM error: ${stderr.slice(0, 500)}${updateAdvice}\n`);
           process.exit(EXIT_PRECHECK_FAILED);
         }
         process.stdout.write(stdout);
         process.exit(EXIT_CLEAN);
       }
 
-      const timeout = parseInt(options.timeout, 10) * 1000;
+      const timeout = options.timeout == null ? 0 : parseInt(options.timeout, 10) * 1000;
       const verbose = options.verbose;
       const exclude = options.exclude
         ? options.exclude.split(',').map(s => s.trim()).filter(Boolean)
@@ -80,6 +105,7 @@ export async function run(argv) {
         : [];
       const fix = options.fix;
       const licenses = options.licenses;
+      const updateDb = options.updateDb;
       const maxLines = parseInt(options.maxLines, 10);
       const maxLinesOmit = options.maxLinesOmit
         ? options.maxLinesOmit.split(',').map(s => s.trim()).filter(Boolean)
@@ -173,7 +199,7 @@ export async function run(argv) {
         );
 
         if (verbose) process.stderr.write(`Fixing with ${fixTools.map(t => t.name).join(', ')}...\n`);
-        const results = await runTools(fixConfigs, targetDir, { timeout, verbose, files, fix: true, exclude });
+        const results = await runTools(fixConfigs, targetDir, { timeout, verbose, files, fix: true, updateDb, exclude });
 
         const warnings = [];
         for (const r of results) {
@@ -185,6 +211,13 @@ export async function run(argv) {
         const toolSummary = results.map(r => `${r.tool} (${(r.duration / 1000).toFixed(1)}s)`).join(', ');
         process.stderr.write(`Fixed with: ${toolSummary}\n`);
         for (const w of warnings) process.stderr.write(`  ${w}\n`);
+        const hasToolErrors = results.some(r => r.error);
+        if (hasToolErrors) {
+          for (const r of results.filter(result => result.error)) {
+            process.stderr.write(`  ${r.tool}: ${r.error}\n`);
+          }
+          process.exit(EXIT_PRECHECK_FAILED);
+        }
         process.exit(EXIT_CLEAN);
       }
 
@@ -199,7 +232,7 @@ export async function run(argv) {
       // Step 5: Run tools sequentially
       // Always pass pruner's file list so tools respect .gitignore, .fcvignore, and hardcoded ignores
       if (verbose) process.stderr.write(`Running ${readyTools.map(t => t.name).join(', ')}...\n`);
-      const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files, licenses, exclude });
+      const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files, licenses, updateDb, exclude });
 
       // Step 5b: Built-in line-count check
       if (maxLines > 0) {
@@ -222,8 +255,7 @@ export async function run(argv) {
       const report = fmt({ targetDir, results: filtered, warnings, fileCount: files.length });
       process.stdout.write(report);
 
-      const hasFindings = filtered.some(r => r.findings && r.findings.length > 0);
-      process.exit(hasFindings ? EXIT_FINDINGS : EXIT_CLEAN);
+      process.exit(getScanExitCode(filtered));
     });
 
   // install-hook subcommand
@@ -246,7 +278,7 @@ export async function run(argv) {
 
       const hookScript = `#!/usr/bin/env bash
 # [fast-cv] pre-commit hook — auto-generated by fast-cv install-hook
-fast-cv . --timeout 60
+fast-cv .
 exit_code=$?
 if [ $exit_code -ne 0 ]; then
   echo ""

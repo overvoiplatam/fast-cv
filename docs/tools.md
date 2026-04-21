@@ -30,6 +30,9 @@ export default {
 | `files` | `string[]` | ruff, eslint, semgrep, bearer, golangci-lint, mypy, typos, vulture, stylelint, sqlfluff |
 | `fix` | `boolean` | ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff |
 | `licenses` | `boolean` | trivy |
+| `updateDb` | `boolean` | trivy |
+
+`checkInstalled()` must verify the same executable that `buildCommand()` runs. Runtime scans should not fetch packages from the network by default; installation and initial database warming belong in `install.sh --mode all` or `--auto-install`. Tools with external databases may honor `options.updateDb` for explicit refresh runs.
 
 ## All Tools (15)
 

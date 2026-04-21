@@ -3,14 +3,35 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+function formatTrivyError(stderr) {
+  const message = stderr.slice(0, 500);
+  const shouldAdviseUpdate = /db|database|metadata|cache|download|update/i.test(stderr);
+  if (!shouldAdviseUpdate) return `trivy error: ${message}`;
+  return `trivy error: ${message} Run fast-cv with --update-db to refresh the trivy databases before scanning, or rerun install.sh --mode all to warm the cache.`;
+}
+
 export default {
   name: 'trivy',
   extensions: ['.py', '.js', '.ts', '.go', '.java', '.rb', '.php', '.tf', '.yaml', '.yml', '.rs', '.kt', '.kts', '.cs', '.c', '.cpp', '.swift', '.sql'],
   installHint: 'curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ~/.local/bin',
 
-  buildCommand(targetDir, configPath, { files = [], fix = false, licenses = false } = {}) {
+  buildCommand(targetDir, configPath, { files = [], fix = false, licenses = false, updateDb = false } = {}) {
     const scanners = licenses ? 'vuln,misconfig,secret,license' : 'vuln,misconfig,secret';
-    const args = ['fs', '--scanners', scanners, '--format', 'json', '--quiet'];
+    const args = [
+      'fs',
+      '--scanners', scanners,
+      '--format', 'json',
+      '--quiet',
+    ];
+    if (!updateDb) {
+      args.push(
+        '--offline-scan',
+        '--skip-db-update',
+        '--skip-java-db-update',
+        '--skip-check-update',
+        '--skip-vex-repo-update',
+      );
+    }
     if (configPath) args.push('--config', configPath);
     // trivy scans the full directory (ignores files arg — same pattern as jscpd)
     args.push(targetDir);
@@ -20,7 +41,7 @@ export default {
   parseOutput(stdout, stderr, exitCode) {
     if (!stdout.trim()) {
       if (exitCode > 0 && stderr.trim()) {
-        throw new Error(`trivy error: ${stderr.slice(0, 500)}`);
+        throw new Error(formatTrivyError(stderr));
       }
       return [];
     }

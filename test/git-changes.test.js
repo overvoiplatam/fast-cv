@@ -13,7 +13,7 @@ function git(args, cwd) {
 /** Create a temp dir with a git repo containing one committed file (a.js). */
 async function makeRepo(prefix = 'fcv-git-') {
   const dir = await mkdtemp(join(tmpdir(), prefix));
-  git(['init'], dir);
+  git(['init', '-b', 'main'], dir);
   git(['config', 'user.email', 'test@test.com'], dir);
   git(['config', 'user.name', 'Test'], dir);
   await writeFile(join(dir, 'a.js'), 'x');

@@ -17,7 +17,7 @@ describe('trivy adapter', () => {
     assert.ok(trivy.extensions.includes('.sql'));
   });
 
-  it('builds correct command without config', () => {
+  it('builds cached/offline command without config by default', () => {
     const { bin, args } = trivy.buildCommand('/tmp/project', null);
     assert.equal(bin, 'trivy');
     assert.ok(args.includes('fs'));
@@ -26,8 +26,23 @@ describe('trivy adapter', () => {
     assert.ok(args.includes('--format'));
     assert.ok(args.includes('json'));
     assert.ok(args.includes('--quiet'));
+    assert.ok(args.includes('--offline-scan'));
+    assert.ok(args.includes('--skip-db-update'));
+    assert.ok(args.includes('--skip-java-db-update'));
+    assert.ok(args.includes('--skip-check-update'));
+    assert.ok(args.includes('--skip-vex-repo-update'));
     assert.ok(args.includes('/tmp/project'));
     assert.ok(!args.includes('--config'));
+  });
+
+  it('builds refresh command when updateDb=true', () => {
+    const { args } = trivy.buildCommand('/tmp/project', null, { updateDb: true });
+    assert.ok(!args.includes('--offline-scan'));
+    assert.ok(!args.includes('--skip-db-update'));
+    assert.ok(!args.includes('--skip-java-db-update'));
+    assert.ok(!args.includes('--skip-check-update'));
+    assert.ok(!args.includes('--skip-vex-repo-update'));
+    assert.ok(args.includes('/tmp/project'));
   });
 
   it('builds correct command with config', () => {
@@ -219,6 +234,13 @@ describe('trivy adapter', () => {
     assert.throws(
       () => trivy.parseOutput('', 'fatal error occurred', 1),
       /trivy error/
+    );
+  });
+
+  it('advises --update-db when trivy database cache fails', () => {
+    assert.throws(
+      () => trivy.parseOutput('', 'DB error: database metadata not found', 1),
+      /--update-db/
     );
   });
 

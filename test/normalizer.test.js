@@ -125,18 +125,21 @@ describe('formatReport', () => {
     const results = makeOneResult();
     const report = formatReport({ targetDir, results, warnings: [] });
     assert.ok(report.includes('## Findings (1 issue)'));
-    assert.ok(report.includes('*1 finding from 1 tool'));
+    assert.ok(report.includes('*1 finding from 1 completed tool'));
   });
 
-  it('skips results with errors in tool summaries', () => {
+  it('renders results with errors as tool errors, not findings', () => {
     const results = [
       { tool: 'ruff', duration: 400, findings: [] },
-      { tool: 'eslint', error: 'command not found', findings: null },
+      { tool: 'eslint', duration: 250, error: 'command not found', findings: null },
     ];
 
     const report = formatReport({ targetDir, results, warnings: [] });
     assert.ok(report.includes('ruff'));
     assert.ok(!report.includes('**Tools**: ruff (0.4s), eslint'));
+    assert.ok(report.includes('## Tool Errors (1)'));
+    assert.ok(report.includes('**[ERROR]** `eslint` command not found (0.3s)'));
+    assert.ok(report.includes('0 findings'));
   });
 
   it('shows fix mode in header when fix=true', () => {

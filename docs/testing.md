@@ -10,38 +10,40 @@ node --test --test-name-pattern="ruff" test/tools/ruff.test.js  # single tool
 
 ## Test Files
 
-### Core Framework (8 files, ~1386 lines)
+### Core Framework
 
-| File | Lines | Covers |
-|------|------:|--------|
-| `test/config-resolver.test.js` | 70 | Config resolution chain: local → user → package → none |
-| `test/pruner.test.js` | 288 | File discovery, language detection, ignore/only filtering |
-| `test/normalizer.test.js` | 262 | Markdown report formatting, finding filtering |
-| `test/sarif.test.js` | 234 | SARIF 2.1.0 output, tag→level mapping, schema compliance |
-| `test/precheck.test.js` | 72 | Tool installation checks, skip/warn behavior |
-| `test/runner.test.js` | 252 | Sequential execution, timeout, spawn errors, verbose logging |
-| `test/line-check.test.js` | 104 | Built-in file length checking, omit patterns |
-| `test/git-changes.test.js` | 104 | Git-changed file detection, scope modes |
+| File | Covers |
+|------|--------|
+| `test/config-resolver.test.js` | Config resolution chain: local → user → package → none |
+| `test/pruner.test.js` | File discovery, language detection, ignore/only filtering |
+| `test/normalizer.test.js` | Markdown report formatting, finding filtering, tool errors |
+| `test/sarif.test.js` | SARIF 2.1.0 output, tag→level mapping, schema compliance |
+| `test/precheck.test.js` | Tool installation checks, skip/warn behavior |
+| `test/runner.test.js` | Sequential execution, optional timeout, spawn errors, verbose logging |
+| `test/line-check.test.js` | Built-in file length checking, omit patterns |
+| `test/git-changes.test.js` | Git-changed file detection, scope modes |
+| `test/index.test.js` | Scan exit-code precedence |
+| `test/install-script.test.js` | Full installer tool provisioning coverage |
 
-### Tool Adapters (15 files, ~1831 lines)
+### Tool Adapters
 
-| File | Lines | Covers |
-|------|------:|--------|
-| `test/tools/ruff.test.js` | 157 | Metadata, command building, JSON parsing, tag classification |
-| `test/tools/eslint.test.js` | 161 | Metadata, command building, JSON parsing, security/sonarjs/jsdoc rules |
-| `test/tools/semgrep.test.js` | 89 | Metadata, command building, JSON parsing, category mapping |
-| `test/tools/bearer.test.js` | 92 | Metadata, JSON parsing, privacy tag |
-| `test/tools/golangci-lint.test.js` | 102 | Metadata, command building, JSON parsing, linter/DOCS classification |
-| `test/tools/jscpd.test.js` | 121 | Metadata, command building, JSON report parsing, temp dir |
-| `test/tools/trivy.test.js` | 236 | Vuln/misconfig/secret/license parsing, severity mapping |
-| `test/tools/mypy.test.js` | 99 | Metadata, JSONL parsing, error-only filter |
-| `test/tools/typos.test.js` | 103 | Metadata, opt-in flag, JSONL parsing, corrections |
-| `test/tools/vulture.test.js` | 76 | Metadata, line-based text parsing, confidence threshold |
-| `test/tools/knip.test.js` | 142 | Metadata, JSON parsing (files/exports/deps) |
-| `test/tools/tsc.test.js` | 83 | Metadata, TypeScript error parsing |
-| `test/tools/clippy.test.js` | 138 | Metadata, JSON Lines parsing, DOCS/BUG/REFACTOR classification |
-| `test/tools/stylelint.test.js` | 110 | Metadata, CSS/SCSS linting, JSON parsing |
-| `test/tools/sqlfluff.test.js` | 122 | Metadata, SQL linting, JSON parsing |
+| File | Covers |
+|------|--------|
+| `test/tools/ruff.test.js` | Metadata, command building, JSON parsing, tag classification |
+| `test/tools/eslint.test.js` | Metadata, command building, JSON parsing, security/sonarjs/jsdoc rules |
+| `test/tools/semgrep.test.js` | Metadata, command building, JSON parsing, category mapping |
+| `test/tools/bearer.test.js` | Metadata, JSON parsing, privacy tag |
+| `test/tools/golangci-lint.test.js` | Metadata, command building, JSON parsing, linter/DOCS classification |
+| `test/tools/jscpd.test.js` | Metadata, command building, JSON report parsing, temp dir |
+| `test/tools/trivy.test.js` | Vuln/misconfig/secret/license parsing, severity mapping, cached/update DB command modes |
+| `test/tools/mypy.test.js` | Metadata, JSONL parsing, error-only filter |
+| `test/tools/typos.test.js` | Metadata, opt-in flag, JSONL parsing, corrections |
+| `test/tools/vulture.test.js` | Metadata, line-based text parsing, confidence threshold |
+| `test/tools/knip.test.js` | Metadata, direct command building, JSON parsing (files/exports/deps) |
+| `test/tools/tsc.test.js` | Metadata, TypeScript error parsing |
+| `test/tools/clippy.test.js` | Metadata, JSON Lines parsing, DOCS/BUG/REFACTOR classification |
+| `test/tools/stylelint.test.js` | Metadata, CSS/SCSS linting, JSON parsing |
+| `test/tools/sqlfluff.test.js` | Metadata, SQL linting, JSON parsing |
 
 ## Contract Test Pattern
 

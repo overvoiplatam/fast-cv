@@ -8,7 +8,7 @@ How AI agents should use and work on fast-cv.
 
 ```bash
 node bin/fast-cv.js .
-# Exit 0 = clean, Exit 1 = findings, Exit 2 = precheck failed
+# Exit 0 = clean, Exit 1 = findings, Exit 2 = validation/tool failure
 ```
 
 ### Scan only changed files (fastest feedback)
@@ -25,6 +25,14 @@ node bin/fast-cv.js --tools=ruff,mypy .        # Python only
 node bin/fast-cv.js --tools=eslint,semgrep .   # lint + SAST
 ```
 
+### Refresh scanner databases
+
+```bash
+node bin/fast-cv.js --update-db --tools=trivy .
+```
+
+`install.sh --mode all` installs trivy and warms its databases for the first cached scan. Use `--update-db` when a validation run should refresh trivy databases before scanning.
+
 ### Auto-fix
 
 ```bash
@@ -33,7 +41,7 @@ node bin/fast-cv.js --tools=eslint --fix .     # fix eslint only
 node bin/fast-cv.js --fix --git-only .         # fix only git-changed files
 ```
 
-**Note:** `--fix` runs only fix-capable tools (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff), applies fixes, outputs a summary to stderr, and exits 0. No findings report is generated. With shipped default configs, `--fix` only applies formatting changes (safe). Full semantic fix requires a local project config.
+**Note:** `--fix` runs only fix-capable tools (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff), applies fixes, outputs a summary to stderr, and exits 0 when fix tools complete. Tool execution errors exit 2. No findings report is generated. With shipped default configs, `--fix` only applies formatting changes (safe). Full semantic fix requires a local project config.
 
 ### Suppress docstring warnings
 
@@ -69,7 +77,7 @@ node bin/fast-cv.js --format sarif . > report.sarif
 |------|---------|--------|
 | 0 | Clean | Continue |
 | 1 | Findings | Fix issues, re-run |
-| 2 | Precheck failed | Install missing tools or check directory |
+| 2 | Validation/tool failure | Check target directory, missing required setup, tool errors, timeouts, parse errors, or stale/missing trivy databases |
 
 ## Self-Scanning This Project
 
@@ -116,8 +124,7 @@ Run with `-v` to see which config was resolved. Check:
 
 ### Timeout issues
 
-Default: 120s per tool. Override with `--timeout <seconds>`.
-Runner sends SIGTERM, waits 5s, then SIGKILL. If a tool consistently times out:
+Default: no per-tool timeout. If `--timeout <seconds>` is set, runner sends SIGTERM, waits 5s, then SIGKILL. If a tool consistently times out:
 1. Use `--only` to reduce file count
 2. Check if the tool has its own cache that needs warming
 3. Increase timeout: `--timeout 300`

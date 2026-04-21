@@ -20,6 +20,11 @@ describe('SARIF formatter', () => {
     ...overrides,
   });
 
+  const makeResultsWithToolError = () => [
+    { tool: 'ruff', error: 'failed', findings: null, duration: 100 },
+    { tool: 'eslint', duration: 200, findings: [makeFinding()] },
+  ];
+
   it('produces valid SARIF envelope', () => {
     const output = formatSarif({
       targetDir: '/tmp/project',
@@ -189,13 +194,24 @@ describe('SARIF formatter', () => {
   it('skips error results', () => {
     const sarif = JSON.parse(formatSarif({
       targetDir: '/tmp/project',
-      results: [
-        { tool: 'ruff', error: 'failed', findings: null, duration: 100 },
-        { tool: 'eslint', duration: 200, findings: [makeFinding()] },
-      ],
+      results: makeResultsWithToolError(),
     }));
 
     assert.equal(sarif.runs[0].results.length, 1);
+  });
+
+  it('includes tool errors in run properties', () => {
+    const sarif = JSON.parse(formatSarif({
+      targetDir: '/tmp/project',
+      results: makeResultsWithToolError(),
+    }));
+
+    assert.deepEqual(sarif.runs[0].properties.toolErrors, [
+      { tool: 'ruff', error: 'failed', duration: 100 },
+    ]);
+    assert.deepEqual(sarif.runs[0].properties.toolBreakdown, [
+      { tool: 'eslint', duration: 200, findings: 1 },
+    ]);
   });
 
   it('includes warnings and fix mode in properties', () => {

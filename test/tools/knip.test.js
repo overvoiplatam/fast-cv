@@ -9,7 +9,7 @@ describe('knip adapter', () => {
     assert.ok(knip.extensions.includes('.ts'));
     assert.ok(knip.extensions.includes('.tsx'));
     assert.ok(knip.extensions.includes('.mjs'));
-    assert.ok(knip.installHint.includes('npx'));
+    assert.ok(knip.installHint.includes('npm install -g knip'));
   });
 
   it('is not opt-in', () => {
@@ -18,8 +18,7 @@ describe('knip adapter', () => {
 
   it('builds correct command with cwd', () => {
     const { bin, args, cwd } = knip.buildCommand('/tmp/project');
-    assert.equal(bin, 'npx');
-    assert.ok(args.includes('knip'));
+    assert.equal(bin, 'knip');
     assert.ok(args.includes('--reporter'));
     assert.ok(args.includes('json'));
     assert.ok(args.includes('--no-progress'));

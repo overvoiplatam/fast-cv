@@ -4,6 +4,7 @@ function spawnAndCollect(bin, args, opts) {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
+    const hasTimeout = Number.isFinite(opts.timeout) && opts.timeout > 0;
 
     const proc = spawn(bin, args, {
       cwd: opts.cwd,
@@ -17,28 +18,30 @@ function spawnAndCollect(bin, args, opts) {
     proc.stderr.on('data', (chunk) => { stderr += chunk; });
 
     let killed = false;
-    const timer = setTimeout(() => {
-      killed = true;
-      // Kill the entire process group (bearer, semgrep, etc. spawn workers)
-      try { process.kill(-proc.pid, 'SIGTERM'); } catch { /* already dead */ }
-      setTimeout(() => {
-        try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already dead */ }
-      }, 5000);
-    }, opts.timeout);
+    const timer = hasTimeout
+      ? setTimeout(() => {
+        killed = true;
+        // Kill the entire process group (bearer, semgrep, etc. spawn workers)
+        try { process.kill(-proc.pid, 'SIGTERM'); } catch { /* already dead */ }
+        setTimeout(() => {
+          try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already dead */ }
+        }, 5000);
+      }, opts.timeout)
+      : null;
 
     proc.on('close', (exitCode) => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       resolve({ stdout, stderr, exitCode, killed });
     });
 
     proc.on('error', (err) => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       resolve({ stdout: '', stderr: err.message, exitCode: -1, killed: false, spawnError: err });
     });
   });
 }
 
-function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false, licenses = false, configSource = 'none', exclude = [] } = {}) {
+function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false, licenses = false, updateDb = false, configSource = 'none', exclude = [] } = {}) {
   return new Promise(async (resolve) => {
     const start = Date.now();
 
@@ -59,7 +62,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
         }
       }
 
-      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files, fix: effectiveFix, licenses, exclude });
+      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files, fix: effectiveFix, licenses, updateDb, exclude });
 
       const result = await spawnAndCollect(bin, args, { cwd, timeout });
 
@@ -119,10 +122,11 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
 }
 
 export async function runTools(toolConfigs, targetDir, options = {}) {
-  const timeout = options.timeout || 120000;
+  const timeout = Number.isFinite(options.timeout) && options.timeout > 0 ? options.timeout : 0;
   const files = options.files || [];
   const fix = options.fix || false;
   const licenses = options.licenses || false;
+  const updateDb = options.updateDb || false;
   const verbose = options.verbose || false;
   const exclude = options.exclude || [];
 
@@ -130,7 +134,7 @@ export async function runTools(toolConfigs, targetDir, options = {}) {
   for (const { tool, config } of toolConfigs) {
     if (verbose) process.stderr.write(`  Running ${tool.name}...\n`);
 
-    const result = await runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses, configSource: config.source, exclude });
+    const result = await runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses, updateDb, configSource: config.source, exclude });
 
     if (verbose) {
       const status = result.error

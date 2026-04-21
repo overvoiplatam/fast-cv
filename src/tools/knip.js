@@ -6,12 +6,12 @@ const execFileAsync = promisify(execFile);
 export default {
   name: 'knip',
   extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'],
-  installHint: 'npx knip (runs via npx, no global install needed)',
+  installHint: 'npm install -g knip',
 
   buildCommand(targetDir) {
     return {
-      bin: 'npx',
-      args: ['knip', '--reporter', 'json', '--no-progress'],
+      bin: 'knip',
+      args: ['--reporter', 'json', '--no-progress'],
       cwd: targetDir,
     };
   },
@@ -98,7 +98,7 @@ export default {
 
   async checkInstalled() {
     try {
-      await execFileAsync('npx', ['--version']);
+      await execFileAsync('knip', ['--version']);
       return true;
     } catch {
       return false;

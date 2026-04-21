@@ -122,6 +122,23 @@ describe('runTools', () => {
     assert.ok(results[0].error.includes('Timeout'));
   });
 
+  it('does not apply a timeout when none is configured', async () => {
+    const results = await runTools(
+      [{
+        tool: makeTool('short-tool', {
+          buildCommand() { return { bin: 'node', args: ['-e', 'setTimeout(() => {}, 25)'] }; },
+          parseOutput() { return []; },
+        }),
+        config: { path: null, source: 'none' },
+      }],
+      '/tmp',
+      {},
+    );
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].error, null);
+  });
+
   it('passes cwd from buildCommand to spawn', async () => {
     const results = await runOne(
       makeTool('cwd-tool', {
@@ -168,6 +185,23 @@ describe('runTools', () => {
     );
 
     assert.equal(receivedOpts.licenses, true);
+  });
+
+  it('passes updateDb option to buildCommand', async () => {
+    let receivedOpts = {};
+    await runOne(
+      makeTool('update-db-tool', {
+        buildCommand(targetDir, configPath, opts) {
+          receivedOpts = opts;
+          return { bin: 'echo', args: ['ok'] };
+        },
+        parseOutput() { return []; },
+      }),
+      '/tmp',
+      { updateDb: true },
+    );
+
+    assert.equal(receivedOpts.updateDb, true);
   });
 
   it('runs preFixCommands before main command in fix mode', async () => {

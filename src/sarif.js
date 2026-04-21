@@ -1,5 +1,6 @@
 import { relative, isAbsolute } from 'node:path';
 import { collectFindings } from './findings.js';
+import { VERSION } from './version.js';
 
 const TAG_LEVEL = {
   SECURITY: 'error',
@@ -25,6 +26,9 @@ export function formatSarif({ targetDir, results, warnings = [], fix = false }) 
   const toolBreakdown = results
     .filter(r => !r.error)
     .map(r => ({ tool: r.tool, duration: r.duration || 0, findings: (r.findings || []).length }));
+  const toolErrors = results
+    .filter(r => r.error)
+    .map(r => ({ tool: r.tool, error: r.error, duration: r.duration || 0 }));
 
   // Collect all findings with normalized paths
   const allFindings = collectFindings(results, targetDir, { includeSourceTool: true });
@@ -73,6 +77,7 @@ export function formatSarif({ targetDir, results, warnings = [], fix = false }) 
     toolBreakdown,
   };
   if (warnings.length > 0) runProperties.warnings = warnings;
+  if (toolErrors.length > 0) runProperties.toolErrors = toolErrors;
   if (fix) runProperties.fixMode = true;
 
   const sarif = {
@@ -82,7 +87,7 @@ export function formatSarif({ targetDir, results, warnings = [], fix = false }) 
       tool: {
         driver: {
           name: 'fast-cv',
-          version: '0.2.0',
+          version: VERSION,
           informationUri: 'https://github.com/overvoiplatam/fast-cv',
           rules,
         },

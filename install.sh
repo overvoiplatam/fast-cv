@@ -244,6 +244,26 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
       || warn "Failed to install jscpd"
   fi
 
+  # knip (Node — JS/TS unused code detector)
+  if command -v knip &>/dev/null; then
+    ok "knip already installed: $(knip --version 2>/dev/null || echo 'version unknown')"
+  else
+    info "Installing knip..."
+    install_npm_global knip \
+      && ok "knip installed" \
+      || warn "Failed to install knip"
+  fi
+
+  # TypeScript compiler (Node — TS type checking)
+  if command -v tsc &>/dev/null; then
+    ok "tsc already installed: $(tsc --version 2>/dev/null || echo 'version unknown')"
+  else
+    info "Installing TypeScript compiler..."
+    install_npm_global typescript \
+      && ok "typescript installed" \
+      || warn "Failed to install TypeScript compiler"
+  fi
+
   # bearer (binary)
   if command -v bearer &>/dev/null; then
     ok "bearer already installed"
@@ -278,6 +298,17 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
     else
       warn "Failed to install trivy — you can install it manually later"
     fi
+  fi
+  if command -v trivy &>/dev/null; then
+    info "Updating trivy vulnerability database for cached scans..."
+    trivy fs --download-db-only --quiet --no-progress "${SCRIPT_DIR}" 2>/dev/null \
+      && ok "trivy vulnerability database ready" \
+      || warn "Failed to download trivy vulnerability database — trivy scans may fail until the DB is cached"
+
+    info "Updating trivy Java database for cached scans..."
+    trivy fs --download-java-db-only --quiet --no-progress "${SCRIPT_DIR}" 2>/dev/null \
+      && ok "trivy Java database ready" \
+      || warn "Failed to download trivy Java database — Java dependency scanning may be reduced until the DB is cached"
   fi
 
   # mypy (Python)
@@ -346,6 +377,20 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
     else
       warn "Failed to install typos — install manually: cargo install typos-cli"
     fi
+  fi
+
+  # clippy (Rust — requires an existing Rust toolchain)
+  if command -v cargo &>/dev/null && cargo clippy --version &>/dev/null; then
+    ok "clippy already installed: $(cargo clippy --version 2>/dev/null)"
+  elif command -v rustup &>/dev/null; then
+    info "Installing clippy via rustup..."
+    if rustup component add clippy 2>/dev/null && cargo clippy --version &>/dev/null; then
+      ok "clippy installed"
+    else
+      warn "Failed to install clippy — run: rustup component add clippy"
+    fi
+  else
+    warn "clippy not installed — install Rust/rustup, then run: rustup component add clippy"
   fi
 else
   info "Skipping tool dependencies (mode: ${INSTALL_MODE})"
@@ -434,3 +479,4 @@ fi
 echo ""
 info "Usage: fast-cv [directory]"
 info "Run 'fast-cv --help' for options."
+info "If any tool install showed a warning, fast-cv still works but coverage is reduced until that tool is installed."

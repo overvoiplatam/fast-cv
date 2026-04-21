@@ -83,7 +83,7 @@ All patterns use gitignore syntax via the `ignore` npm package.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `[directory]` | `.` | Target directory to scan |
-| `-t, --timeout <seconds>` | `120` | Per-tool timeout |
+| `-t, --timeout <seconds>` | disabled | Optional per-tool timeout guardrail |
 | `--tools <names>` | all applicable | Comma-separated tool list |
 | `-v, --verbose` | `false` | Show detailed output on stderr |
 | `--auto-install` | `false` | Auto-install missing tools |
@@ -91,6 +91,7 @@ All patterns use gitignore syntax via the `ignore` npm package.
 | `--only <patterns>` | — | Scan only matching files/globs |
 | `--fix` | `false` | Run only fix-capable tools, apply fixes, and exit (no findings report; see Fix Safety below) |
 | `--licenses` | `false` | Include license compliance scanning (trivy) |
+| `--update-db` | `false` | Refresh external scanner databases before scanning (currently trivy) |
 | `--sbom` | `false` | Generate CycloneDX SBOM (trivy, early exit) |
 | `--max-lines <number>` | `600` | Flag files exceeding this line count (0 to disable) |
 | `--max-lines-omit <patterns>` | — | Comma-separated patterns to exclude from line count check |
@@ -110,6 +111,16 @@ All patterns use gitignore syntax via the `ignore` npm package.
 | `none` | N/A | Runs | Tool uses its own defaults |
 
 When semantic fix is skipped, a warning appears in the report. To get full `--fix` behavior, provide a local config file for the tool.
+
+### Tool Errors and Exit Codes
+
+Tool runtime failures are reported separately from code findings. Missing tools remain warnings when at least one applicable tool can run, but a selected tool that errors, times out, or produces unparseable output makes validation incomplete and exits `2`. Trivy database cache failures include guidance to run `fast-cv --update-db .` or rerun `install.sh --mode all`.
+
+| Code | Meaning |
+|------|---------|
+| `0` | Clean — no findings and all selected tools completed |
+| `1` | Code findings exist |
+| `2` | Bad target, precheck failure, tool runtime error, timeout, parse error, or stale/missing scanner database |
 
 ### Subcommands
 

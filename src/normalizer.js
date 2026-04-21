@@ -39,6 +39,7 @@ export function filterFindings(results, targetDir, ignoreFilter, onlyFilter, { v
 export function formatReport({ targetDir, results, warnings = [], fix = false, fileCount = 0 }) {
   const lines = [];
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const toolErrors = results.filter(r => r.error);
 
   // Collect tool timings
   const toolSummaries = results
@@ -68,7 +69,7 @@ export function formatReport({ targetDir, results, warnings = [], fix = false, f
   // Collect all findings, normalizing file paths to be relative
   const allFindings = collectFindings(results, targetDir);
 
-  if (allFindings.length === 0 && warnings.length === 0) {
+  if (allFindings.length === 0 && warnings.length === 0 && toolErrors.length === 0) {
     lines.push('## No issues found');
     lines.push('');
     lines.push('All checks passed.');
@@ -101,10 +102,26 @@ export function formatReport({ targetDir, results, warnings = [], fix = false, f
       }
     }
 
+    if (toolErrors.length > 0) {
+      if (allFindings.length > 0) {
+        lines.push('---');
+        lines.push('');
+      }
+      lines.push(`## Tool Errors (${toolErrors.length})`);
+      lines.push('');
+      for (const r of toolErrors) {
+        const duration = r.duration != null ? ` (${(r.duration / 1000).toFixed(1)}s)` : '';
+        lines.push(`- **[ERROR]** \`${r.tool}\` ${r.error}${duration}`);
+      }
+      lines.push('');
+    }
+
     // Warnings section
     if (warnings.length > 0) {
-      lines.push('---');
-      lines.push('');
+      if (allFindings.length > 0 || toolErrors.length > 0) {
+        lines.push('---');
+        lines.push('');
+      }
       lines.push('## Warnings');
       lines.push('');
       for (const w of warnings) {
@@ -119,7 +136,8 @@ export function formatReport({ targetDir, results, warnings = [], fix = false, f
   lines.push('');
   const toolCount = results.filter(r => !r.error).length;
   const filePart = fileCount > 0 ? ` across ${fileCount} file${fileCount !== 1 ? 's' : ''}` : '';
-  lines.push(`*${allFindings.length} finding${allFindings.length !== 1 ? 's' : ''} from ${toolCount} tool${toolCount !== 1 ? 's' : ''}${filePart} in ${(totalDuration / 1000).toFixed(1)}s*`);
+  const errorPart = toolErrors.length > 0 ? `; ${toolErrors.length} tool error${toolErrors.length !== 1 ? 's' : ''}` : '';
+  lines.push(`*${allFindings.length} finding${allFindings.length !== 1 ? 's' : ''} from ${toolCount} completed tool${toolCount !== 1 ? 's' : ''}${filePart} in ${(totalDuration / 1000).toFixed(1)}s${errorPart}*`);
   lines.push('');
 
   return lines.join('\n');

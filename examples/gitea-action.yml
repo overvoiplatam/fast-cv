@@ -61,6 +61,12 @@ jobs:
   # Verbose output for debugging CI issues:
   #   run: fast-cv --verbose .
   #
+  # Optional timeout guardrail for CI runners:
+  #   run: fast-cv --timeout 300 .
+  #
+  # Refresh trivy databases during validation:
+  #   run: fast-cv --update-db --tools=trivy .
+  #
   # Exclude paths:
   #   run: fast-cv --exclude "vendor/**,dist/**" .
   #

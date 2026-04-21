@@ -4,42 +4,39 @@ Node.js ESM CLI that orchestrates linters and security scanners sequentially, ou
 
 ## File Map
 
-| File | Lines | Purpose |
-|------|------:|---------|
-| `bin/fast-cv.js` | 4 | Entry point — calls `run(process.argv)` |
-| `src/index.js` | 247 | CLI definition, 12-step pipeline, `install-hook` subcommand |
-| `src/pruner.js` | 175 | File discovery, ignore/only filtering, language detection |
-| `src/precheck.js` | 110 | Tool installation verification and auto-install |
-| `src/config-resolver.js` | 84 | Config resolution chain (local → user → package → none) |
-| `src/runner.js` | 143 | Sequential tool execution with verbose progress |
-| `src/normalizer.js` | 103 | Markdown report formatting + post-filter |
-| `src/sarif.js` | 97 | SARIF 2.1.0 output formatting |
-| `src/findings.js` | 15 | Shared finding collection helper |
-| `src/constants.js` | 29 | Shared constants and JSON Lines parser |
-| `src/line-check.js` | 42 | Built-in file length checker |
-| `src/git-changes.js` | 74 | Git-changed file detection |
-| `src/tools/index.js` | 18 | Tool registry — exports all 15 adapters |
-| `src/tools/ruff.js` | 94 | Python linter/formatter |
-| `src/tools/eslint.js` | 135 | JavaScript/TypeScript linter |
-| `src/tools/semgrep.js` | 72 | Multi-language SAST |
-| `src/tools/bearer.js` | 82 | Privacy/PII scanner |
-| `src/tools/golangci-lint.js` | 88 | Go linter |
-| `src/tools/jscpd.js` | 114 | Copy-paste detector |
-| `src/tools/trivy.js` | 106 | SCA + IaC + secrets + license scanner |
-| `src/tools/mypy.js` | 52 | Python type checker |
-| `src/tools/typos.js` | 53 | Typo finder (opt-in) |
-| `src/tools/vulture.js` | 56 | Python dead code finder |
-| `src/tools/knip.js` | 104 | JS/TS unused code finder |
-| `src/tools/tsc.js` | 51 | TypeScript type checker |
-| `src/tools/clippy.js` | 74 | Rust linter (clippy) |
-| `src/tools/stylelint.js` | 74 | CSS/SCSS/Less linter |
-| `src/tools/sqlfluff.js` | 75 | SQL linter |
-| `defaults/ruff.toml` | 57 | Shipped ruff config |
-| `defaults/eslint.config.mjs` | 133 | Shipped eslint config (9 plugins) |
-| `defaults/mypy.ini` | 4 | Shipped mypy config |
-| `defaults/semgrep/` | dir | Shipped semgrep rules (taint.yaml + owasp-top-ten.yaml) |
-| `defaults/.golangci.yml` | 10 | Shipped golangci-lint config (revive exported rule) |
-| `install.sh` | 430 | Full installer (modes: all, app, configs) |
+| File | Purpose |
+|------|---------|
+| `bin/fast-cv.js` | Entry point — calls `run(process.argv)` |
+| `src/index.js` | CLI definition, 12-step pipeline, `install-hook` subcommand |
+| `src/pruner.js` | File discovery, ignore/only filtering, language detection |
+| `src/precheck.js` | Tool installation verification and auto-install |
+| `src/config-resolver.js` | Config resolution chain (local → user → package → none) |
+| `src/runner.js` | Sequential tool execution with optional timeout + verbose progress |
+| `src/normalizer.js` | Markdown report formatting + post-filter |
+| `src/sarif.js` | SARIF 2.1.0 output formatting |
+| `src/findings.js` | Shared finding collection helper |
+| `src/constants.js` | Shared constants and JSON Lines parser |
+| `src/line-check.js` | Built-in file length checker |
+| `src/git-changes.js` | Git-changed file detection |
+| `src/version.js` | Shared package version metadata |
+| `src/tools/index.js` | Tool registry — exports all 15 adapters |
+| `src/tools/ruff.js` | Python linter/formatter |
+| `src/tools/eslint.js` | JavaScript/TypeScript linter |
+| `src/tools/semgrep.js` | Multi-language SAST |
+| `src/tools/bearer.js` | Privacy/PII scanner |
+| `src/tools/golangci-lint.js` | Go linter |
+| `src/tools/jscpd.js` | Copy-paste detector |
+| `src/tools/trivy.js` | SCA + IaC + secrets + license scanner |
+| `src/tools/mypy.js` | Python type checker |
+| `src/tools/typos.js` | Typo finder (opt-in) |
+| `src/tools/vulture.js` | Python dead code finder |
+| `src/tools/knip.js` | JS/TS unused code finder |
+| `src/tools/tsc.js` | TypeScript type checker |
+| `src/tools/clippy.js` | Rust linter (clippy) |
+| `src/tools/stylelint.js` | CSS/SCSS/Less linter |
+| `src/tools/sqlfluff.js` | SQL linter |
+| `defaults/` | Shipped baseline configs |
+| `install.sh` | Full installer (modes: all, app, configs) |
 
 ## Pipeline (12 Steps)
 
@@ -53,12 +50,12 @@ src/index.js
 4. **Filter Tools** (L116-136) — Match tools by language extensions + `--tools` flag
 5. **Precheck** (L138-145) — Verify tools are installed (optional auto-install)
 6. **Resolve Configs** (L147-153) — Find config for each tool (4-level chain)
-7. **Sequential Run** (L155-158) — Run tools one at a time with timeout + verbose progress
+7. **Sequential Run** — Run tools one at a time with optional timeout + verbose progress
 8. **Line-Check** (L160-164) — Built-in file length checker
 9. **Post-Filter** (L166-167) — Strip findings from ignored/excluded files
 10. **Docstring Filter** (L169-173) — Suppress DOCS findings if `--no-docstring`
 11. **Format + Output** (L175-181) — Generate Markdown or SARIF report, write to stdout
-12. **Exit Code** (L183-184) — 0=clean, 1=findings
+12. **Exit Code** — 0=clean, 1=findings, 2=validation/tool failure
 
 ## Data Flow
 
@@ -139,7 +136,8 @@ src/index.js
 ## Key Design Decisions
 
 - **Sequential execution** — tools run one at a time to avoid overwhelming low-resource machines; errors in one tool don't affect others
-- **SIGTERM → SIGKILL** — 5s grace after SIGTERM before force-kill (runner.js L19-27)
+- **Timeout is opt-in** — no default guardrail. When `--timeout <seconds>` is passed, the runner sends SIGTERM and force-kills with SIGKILL after a 5-second grace period. Without the flag, tools run to completion under whatever internal timeouts they provide, keeping short-run jobs free of surprise cancellations but making a hanging tool visible (rather than auto-killed and silently marked failed)
+- **Offline-first scanner databases** — trivy runs with `--offline-scan --skip-db-update --skip-java-db-update --skip-check-update --skip-vex-repo-update` by default so repeated scans are deterministic and do not depend on network availability. `--update-db` opts into a fresh download for that invocation; `install.sh --mode all` pre-warms the cache so first-time users start from a current baseline
 - **`NO_COLOR=1`** — all tools run without ANSI codes for clean parsing (runner.js L10)
 - **Post-filter safety net** — findings re-checked against ignore rules after tools run (normalizer.js L4-17)
 - **3 dependencies only** — commander, ignore, yaml (no test deps, no build tools)

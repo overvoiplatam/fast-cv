@@ -1,7 +1,7 @@
 # fast-cv
 
 Fast Code Validation — sequential linters & security scanners with unified Markdown/SARIF reports.
-Node.js ESM, v0.2.0, 3 dependencies, zero build step.
+Node.js ESM, v0.2.1, 3 dependencies, zero build step.
 
 ## Commands
 
@@ -22,21 +22,21 @@ node bin/fast-cv.js --no-docstring .  # suppress DOCS tag findings
 
 12-step pipeline: CLI parse → git-only resolution → prune → filter tools → precheck → resolve configs → sequential run → line-check → post-filter → docstring filter → format → output + exit code.
 
-| File | Lines | Role |
-|------|------:|------|
-| `src/index.js` | 247 | CLI + pipeline orchestration |
-| `src/pruner.js` | 175 | File discovery, ignore/only filtering |
-| `src/precheck.js` | 110 | Tool installation checks |
-| `src/config-resolver.js` | 84 | Config resolution (local → user → package → none) |
-| `src/runner.js` | 143 | Sequential execution with verbose progress |
-| `src/normalizer.js` | 103 | Markdown report + post-filter |
-| `src/sarif.js` | 97 | SARIF 2.1.0 output |
-| `src/findings.js` | 15 | Shared finding collection helper |
-| `src/constants.js` | 29 | Shared constants and JSON Lines parser |
-| `src/line-check.js` | 42 | Built-in file length checker |
-| `src/git-changes.js` | 74 | Git-changed file detection |
-| `src/tools/*.js` | 15 files | One adapter per tool |
-| `defaults/` | dir | Shipped configs (ruff, eslint, mypy, semgrep, stylelint, golangci-lint) |
+| File | Role |
+|------|------|
+| `src/index.js` | CLI + pipeline orchestration |
+| `src/pruner.js` | File discovery, ignore/only filtering |
+| `src/precheck.js` | Tool installation checks |
+| `src/config-resolver.js` | Config resolution (local → user → package → none) |
+| `src/runner.js` | Sequential execution with optional timeout + verbose progress |
+| `src/normalizer.js` | Markdown report + post-filter |
+| `src/sarif.js` | SARIF 2.1.0 output |
+| `src/findings.js` | Shared finding collection helper |
+| `src/constants.js` | Shared constants and JSON Lines parser |
+| `src/line-check.js` | Built-in file length checker |
+| `src/git-changes.js` | Git-changed file detection |
+| `src/tools/*.js` | One adapter per tool |
+| `defaults/` | Shipped configs (ruff, eslint, mypy, semgrep, stylelint, golangci-lint) |
 
 ## Code Conventions
 
@@ -57,8 +57,8 @@ Canonical source: [docs/tools.md](docs/tools.md)
 
 Every change must satisfy:
 
-1. `npm test` passes (all 23 test files)
-2. `node bin/fast-cv.js .` exits clean (exit code 0)
+1. `npm test` passes
+2. `node bin/fast-cv.js --tools=eslint .` exits clean (exit code 0)
 3. New tools: adapter in `src/tools/` + test in `test/tools/` + entry in `src/tools/index.js`
 4. New configs: registered in `src/config-resolver.js` + shipped in `defaults/`
 
