@@ -10,9 +10,10 @@ export default {
   installHint: 'npm install -g @stoplight/spectral-cli @redocly/cli',
 
   buildCommand(targetDir, configPath, { files = [] } = {}) {
-    const args = ['lint', '--format', 'json', '--fail-severity', 'off', '--quiet'];
+    const args = ['lint', '--format', 'json', '--ignore-unknown-format'];
     if (configPath) args.push('--ruleset', configPath);
-    if (files.length > 0) args.push(...files);
+    const relevant = files.filter(f => /\.(ya?ml|json)$/i.test(f));
+    if (relevant.length > 0) args.push(...relevant);
     else args.push(`${targetDir}/**/*.{yaml,yml,json}`);
     return { bin: 'spectral', args, cwd: targetDir };
   },
@@ -35,9 +36,13 @@ export default {
       }
       return [];
     }
+    // spectral --format json may append a status line ("No results...") after the array
+    const start = stdout.indexOf('[');
+    const end = stdout.lastIndexOf(']');
+    if (start === -1 || end === -1 || end < start) return [];
     let items;
     try {
-      items = JSON.parse(stdout);
+      items = JSON.parse(stdout.slice(start, end + 1));
     } catch {
       throw new Error(`spectral: failed to parse JSON output: ${stdout.slice(0, 200)}`);
     }

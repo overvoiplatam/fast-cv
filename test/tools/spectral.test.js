@@ -17,7 +17,10 @@ describe('spectral adapter', () => {
     assert.ok(args.includes('lint'));
     assert.ok(args.includes('--format'));
     assert.ok(args.includes('json'));
+    assert.ok(args.includes('--ignore-unknown-format'));
     assert.ok(args.some(a => a.includes('**/*.{yaml,yml,json}')));
+    assert.ok(!args.includes('--quiet'), 'no --quiet (not a spectral 6.x flag)');
+    assert.ok(!args.includes('off'), 'no fail-severity=off (invalid value)');
   });
 
   it('buildCommand with files', () => {

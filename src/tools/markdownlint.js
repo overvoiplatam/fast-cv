@@ -15,7 +15,8 @@ export default {
     const args = [];
     if (configPath) args.push('--config', configPath);
     if (fix) args.push('--fix');
-    if (files.length > 0) args.push(...files);
+    const relevant = files.filter(f => /\.(md|markdown)$/i.test(f));
+    if (relevant.length > 0) args.push(...relevant);
     else args.push('**/*.{md,markdown}');
     return { bin: 'markdownlint-cli2', args, cwd: targetDir };
   },

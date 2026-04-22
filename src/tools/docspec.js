@@ -14,8 +14,9 @@ export default {
     const args = [runner];
     if (configPath) args.push('--config', configPath);
     if (fix) args.push('--fix');
-    if (files.length > 0) {
-      args.push('--files', ...files);
+    const relevant = files.filter(f => /\.(ya?ml|json)$/i.test(f));
+    if (relevant.length > 0) {
+      args.push('--files', ...relevant);
     } else {
       args.push('--target', targetDir);
     }

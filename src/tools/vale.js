@@ -16,7 +16,8 @@ export default {
   buildCommand(targetDir, configPath, { files = [] } = {}) {
     const args = ['--output=JSON'];
     if (configPath) args.push('--config', configPath);
-    if (files.length > 0) args.push(...files);
+    const relevant = files.filter(f => /\.(md|markdown|rst|adoc|txt)$/i.test(f));
+    if (relevant.length > 0) args.push(...relevant);
     else args.push(targetDir);
     return { bin: 'vale', args, cwd: targetDir };
   },

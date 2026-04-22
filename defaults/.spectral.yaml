@@ -1,28 +1,16 @@
 # fast-cv default Spectral ruleset.
-# Extends recommended rules for OpenAPI (OAS) and AsyncAPI, with per-rule tuning.
+# Extends recommended rules for OpenAPI (OAS) and AsyncAPI.
 # Users can override by dropping a local `.spectral.yaml` at the project root.
 
 extends:
   - [spectral:oas, recommended]
   - [spectral:asyncapi, recommended]
 
-# Spectral resolves local and remote $refs by default. Set to false to force offline-only.
-resolver:
-  resolveRef: true
-
 rules:
-  # Promote: genuinely breaks consumers when missing
-  info-contact: error
-  no-$ref-siblings: error
-  oas3-valid-media-example: error
-
   # Downgrade: real but rarely load-bearing in early-stage docs
   operation-operationId: warn
   operation-tags: warn
   info-description: warn
-
-  # Disable: conflicts with common legit patterns
-  no-unused-components: off
 
 overrides:
   # Looser rules on test fixtures and generated output
