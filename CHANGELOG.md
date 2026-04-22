@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Documentation Validation (default feature)
+
+- Four new tool adapters, all emitting under the `DOCS` tag:
+  - `docspec` — pure-Node validator for OpenAPI 3.x, Swagger 2.0, AsyncAPI 2.x/3.x, and JSON Schema documents. Classifies files by strong root-key signals, reports parse errors and structural-sanity issues (missing `info.title`, wrong version format, path keys without a leading slash, non-object `properties`, etc.), and resolves `$ref` (local + remote) with a 5s timeout, 1 MB size cap, 24h cache, and optional allowlist.
+  - `spectral` — wraps `@stoplight/spectral-cli` with a shipped ruleset extending `spectral:oas` + `spectral:asyncapi` recommended, per-rule severity tuning, and `resolver.resolveRef: true` for remote ref resolution. `--fix` mode invokes `redocly bundle` as a pre-fix command when `redocly` is installed.
+  - `markdownlint` — wraps `markdownlint-cli2` with a shipped ruleset (disables MD013/MD033/MD041, allows duplicate headings in sibling sections). Supports native `--fix`.
+  - `vale` — wraps `vale` with a shipped `.vale.ini` using `write-good` + `proselint` style packages. `install.sh` runs `vale sync` to populate styles under `~/.config/fast-cv/defaults/vale-styles/`.
+- `install.sh --mode all` now provisions `@stoplight/spectral-cli`, `@redocly/cli`, `markdownlint-cli2`, and `vale` (via brew → `go install` → GitHub release fallback).
+- `docspec.json`, `.spectral.yaml`, `.markdownlint.json`, `.vale.ini` ship under `defaults/` and copy into `~/.config/fast-cv/defaults/` during `--mode all` or `--mode configs`.
+- `docspec` supports `--fix` with a safe whitelist: prepends `/` to OpenAPI path keys missing it; quotes numeric `swagger: 2.0` as `"2.0"`.
+
 ### Breaking
 
 - **`--timeout` is now optional and disabled by default.** Previously, `fast-cv` imposed a 120-second guardrail on every tool. The guardrail is now off unless you pass `--timeout <seconds>` explicitly. Tools without their own internal timeout can, in theory, hang indefinitely.

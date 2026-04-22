@@ -28,6 +28,10 @@ describe('install.sh tool provisioning', () => {
       'install_python_tool sqlfluff',
       'cargo install typos-cli',
       'rustup component add clippy',
+      'install_npm_global "@stoplight/spectral-cli"',
+      'install_npm_global "@redocly/cli"',
+      'install_npm_global markdownlint-cli2',
+      'go install github.com/errata-ai/vale/v3@latest',
     ]) {
       assert.ok(script.includes(expected), `install.sh should include: ${expected}`);
     }

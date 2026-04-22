@@ -14,5 +14,9 @@ import tsc from './tsc.js';
 import clippy from './clippy.js';
 import stylelint from './stylelint.js';
 import sqlfluff from './sqlfluff.js';
+import docspec from './docspec.js';
+import spectral from './spectral.js';
+import markdownlint from './markdownlint.js';
+import vale from './vale.js';
 
-export const tools = [ruff, eslint, semgrep, bearer, golangciLint, jscpd, trivy, mypy, typos, vulture, knip, tsc, clippy, stylelint, sqlfluff];
+export const tools = [ruff, eslint, semgrep, bearer, golangciLint, jscpd, trivy, mypy, typos, vulture, knip, tsc, clippy, stylelint, sqlfluff, docspec, spectral, markdownlint, vale];

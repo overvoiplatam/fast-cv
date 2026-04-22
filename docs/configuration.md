@@ -32,6 +32,10 @@ Implementation: `src/config-resolver.js`
 | clippy | `clippy.toml`, `.clippy.toml` | — |
 | stylelint | `.stylelintrc`, `.stylelintrc.json`, `.stylelintrc.yml`, `.stylelintrc.yaml`, `stylelint.config.js`, `stylelint.config.mjs`, `stylelint.config.cjs` | `defaults/.stylelintrc.json` |
 | sqlfluff | `.sqlfluff`, `setup.cfg`, `pyproject.toml` | — |
+| docspec | `docspec.json`, `.docspec.json` | `defaults/docspec.json` |
+| spectral | `.spectral.yaml`, `.spectral.yml`, `.spectral.json`, `.spectral.js` | `defaults/.spectral.yaml` |
+| markdownlint | `.markdownlint.json`, `.markdownlint.yaml`, `.markdownlint.yml`, `.markdownlint-cli2.jsonc`, `.markdownlint-cli2.yaml` | `defaults/.markdownlint.json` |
+| vale | `.vale.ini`, `vale.ini` | `defaults/.vale.ini` (styles synced via `vale sync`) |
 
 ## Shipped Defaults
 
@@ -62,6 +66,75 @@ Implementation: `src/config-resolver.js`
 - `owasp-top-ten.yaml` — ~543 community OWASP rules (downloaded during `install.sh`)
 
 Note: semgrep reads all `.yaml` files in the directory. The `config-resolver.js` `fileExists()` uses `fs.access()` which works for both files and directories.
+
+### `defaults/docspec.json`
+- `maxFileBytes: 2000000` — skip files larger than 2 MB
+- `remoteRefs.enabled: true` — fetch remote `$ref` with a 5s timeout, 1 MB size cap, 64-fetches-per-file limit, 24h local cache
+- `remoteRefs.allowlist: null` — accept all remote hosts (set to a string array of URL prefixes to lock it down)
+- `forceType: {}` — glob → `openapi | swagger | asyncapi | jsonschema | none` overrides for ambiguous files
+
+### `defaults/.spectral.yaml`
+- Extends `spectral:oas` + `spectral:asyncapi` recommended rulesets
+- Promotes `info-contact`, `no-$ref-siblings`, `oas3-valid-media-example` to `error`
+- Downgrades `operation-operationId`, `operation-tags`, `info-description` to `warn`
+- Disables `no-unused-components`
+- Loosens rules under `**/test/**`, `**/fixtures/**`, `**/generated/**`
+- `resolver.resolveRef: true` (remote ref resolution — set to `false` for offline-only)
+
+### `defaults/.markdownlint.json`
+- Enables `default: true`
+- Disables `MD013` (line length), `MD033` (raw HTML), `MD041` (first-line H1)
+- `MD024` allows duplicate headings in sibling sections
+
+### `defaults/.vale.ini`
+- Style packages: `write-good`, `proselint`
+- Applies to `.md`, `.markdown`, `.rst`, `.adoc`, `.txt`
+- `MinAlertLevel = suggestion`
+- `installer.sh` runs `vale sync` after copying this file so the style bundles live alongside it under `~/.config/fast-cv/defaults/vale-styles/`
+
+## Documentation Validation
+
+fast-cv ships four cooperating tools for validating documentation. All emit under the `DOCS` tag; the `rule` field identifies the subtype (`openapi/*`, `swagger/*`, `asyncapi/*`, `jsonschema/*`, `docspec/parse`, `spectral/<ruleId>`, `md/<ruleId>`, `vale/<Check>`).
+
+| Tool | What it catches | External binary |
+|------|-----------------|-----------------|
+| `docspec` | YAML/JSON parse errors, structural sanity of OpenAPI 3.x / Swagger 2.0 / AsyncAPI 2.x-3.x / JSON Schema specs, remote `$ref` reachability | none — pure Node |
+| `spectral` | Full spec conformance per `spectral:oas` + `spectral:asyncapi` rulesets | `spectral` (installed by `install.sh`) |
+| `markdownlint` | Markdown structure and style issues | `markdownlint-cli2` (installed by `install.sh`) |
+| `vale` | Prose style (weasel words, passive voice, typography) | `vale` (installed by `install.sh`) |
+
+### Detection (`docspec`)
+
+`docspec` classifies only on strong signals and silently ignores non-spec YAML/JSON. A file is classified when:
+
+| Format | Required root keys |
+|--------|--------------------|
+| OpenAPI | `openapi` is a string matching `^3\.\d+(\.\d+)?$` AND `info` is an object |
+| Swagger | `swagger` is `"2.0"` / `2` / any `N.N` string AND `info` is an object |
+| AsyncAPI | `asyncapi` is a `2.x` or `3.x` semver string AND `info` is an object |
+| JSON Schema | `$schema` is a string (any draft) OR filename matches `*.schema.json` with a schema-like shape |
+
+Override per glob in `docspec.json` via `forceType: { "api/**/*.yml": "openapi", "legacy.json": "none" }`.
+
+### Remote `$ref` Safety
+
+When `docspec` encounters a remote `$ref` (`http://...` or `https://...`), it:
+
+1. Checks the per-file allowlist; blocked URLs emit `<format>/ref-remote-blocked` warnings.
+2. Checks a local 24h cache under `remoteRefs.cacheDir` (default `~/.cache/fast-cv/refs`). Cache can be busted with `--update-db`.
+3. Fetches with a 5s timeout and streaming 1 MB size cap; failures emit `<format>/remote-ref-unreachable` warnings.
+4. Stops fetching once the per-file budget (`maxFetchesPerFile`, default 64) is exhausted.
+
+Set `remoteRefs.enabled: false` in `docspec.json` to block all remote fetches; every remote `$ref` in-scope then emits a `<format>/remote-ref-disabled` warning.
+
+Spectral's own resolver also honors `resolver.resolveRef` in `.spectral.yaml`; set it to `false` for fully offline runs.
+
+### Fix Behavior
+
+- `docspec --fix` applies only whitelisted, byte-preserving edits: leading-slash injection for OpenAPI path keys, string-quoting for `swagger: 2.0` (number → `"2.0"`).
+- `spectral --fix` invokes `redocly bundle <file> --output <file>` (if `redocly` is installed) to resolve refs and normalize structure before re-linting.
+- `markdownlint --fix` runs the tool's native autofix.
+- `vale` has no fix mode — findings are suggestions only.
 
 ## Ignore System
 

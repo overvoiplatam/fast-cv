@@ -30,6 +30,13 @@ const TOOL_CONFIG_FILES = {
     'stylelint.config.js', 'stylelint.config.mjs', 'stylelint.config.cjs',
   ],
   sqlfluff: ['.sqlfluff', 'setup.cfg', 'pyproject.toml'],
+  docspec: ['docspec.json', '.docspec.json'],
+  spectral: ['.spectral.yaml', '.spectral.yml', '.spectral.json', '.spectral.js'],
+  markdownlint: [
+    '.markdownlint.json', '.markdownlint.yaml', '.markdownlint.yml',
+    '.markdownlint-cli2.jsonc', '.markdownlint-cli2.yaml',
+  ],
+  vale: ['.vale.ini', 'vale.ini'],
 };
 
 // Map of tool name → default config filename shipped with fast-cv
@@ -40,6 +47,10 @@ const PACKAGE_DEFAULT_FILES = {
   mypy: 'mypy.ini',
   stylelint: '.stylelintrc.json',
   'golangci-lint': '.golangci.yml',
+  docspec: 'docspec.json',
+  spectral: '.spectral.yaml',
+  markdownlint: '.markdownlint.json',
+  vale: '.vale.ini',
 };
 
 async function fileExists(filePath) {

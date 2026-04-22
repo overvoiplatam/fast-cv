@@ -1,0 +1,12 @@
+{
+  "forceType": {},
+  "maxFileBytes": 2000000,
+  "remoteRefs": {
+    "enabled": true,
+    "timeoutMs": 5000,
+    "maxResponseBytes": 1048576,
+    "maxFetchesPerFile": 64,
+    "allowlist": null,
+    "cacheDir": "~/.cache/fast-cv/refs"
+  }
+}

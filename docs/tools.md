@@ -34,7 +34,7 @@ export default {
 
 `checkInstalled()` must verify the same executable that `buildCommand()` runs. Runtime scans should not fetch packages from the network by default; installation and initial database warming belong in `install.sh --mode all` or `--auto-install`. Tools with external databases may honor `options.updateDb` for explicit refresh runs.
 
-## All Tools (15)
+## All Tools (19)
 
 | # | Name | File | Extensions | Tags | Opt-In | Fix | Config |
 |---|------|------|------------|------|--------|-----|--------|
@@ -53,6 +53,10 @@ export default {
 | 13 | clippy | `src/tools/clippy.js` | `.rs` | LINTER BUG REFACTOR DOCS | no | yes | clippy.toml |
 | 14 | stylelint | `src/tools/stylelint.js` | `.css .scss .sass .less` | LINTER FORMAT | no | yes | .stylelintrc.json |
 | 15 | sqlfluff | `src/tools/sqlfluff.js` | `.sql` | LINTER FORMAT BUG | no | yes | — |
+| 16 | docspec | `src/tools/docspec.js` | `.yaml .yml .json` | DOCS | no | yes | docspec.json |
+| 17 | spectral | `src/tools/spectral.js` | `.yaml .yml .json` | DOCS | no | yes | .spectral.yaml |
+| 18 | markdownlint | `src/tools/markdownlint.js` | `.md .markdown` | DOCS | no | yes | .markdownlint.json |
+| 19 | vale | `src/tools/vale.js` | `.md .markdown .rst .adoc .txt` | DOCS | no | no | .vale.ini |
 
 ## Tag Reference
 
@@ -70,7 +74,7 @@ Tags categorize findings by type. Each tag maps to a SARIF severity level.
 | TYPE_ERROR | warning | Static type errors |
 | LINTER | warning | Code quality / style violations |
 | REFACTOR | warning | Complexity, cognitive load, maintainability |
-| DOCS | warning | Missing or incomplete documentation |
+| DOCS | warning | Missing docstrings, documentation spec errors (OpenAPI/AsyncAPI/JSON Schema), Markdown and prose style issues |
 | TYPO | warning | Spelling mistakes in identifiers/strings |
 | DEAD_CODE | warning | Unused code, exports, dependencies |
 | FORMAT | note | Formatting / whitespace issues |

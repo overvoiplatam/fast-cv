@@ -392,6 +392,73 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
   else
     warn "clippy not installed — install Rust/rustup, then run: rustup component add clippy"
   fi
+
+  # spectral (Node — OpenAPI/AsyncAPI/JSON Schema linter)
+  if command -v spectral &>/dev/null; then
+    ok "spectral already installed: $(spectral --version 2>/dev/null || echo 'version unknown')"
+  else
+    info "Installing spectral..."
+    install_npm_global "@stoplight/spectral-cli" \
+      && ok "spectral installed" \
+      || warn "Failed to install spectral"
+  fi
+
+  # redocly (Node — OpenAPI bundler, backs docspec/spectral fix mode)
+  if command -v redocly &>/dev/null; then
+    ok "redocly already installed: $(redocly --version 2>/dev/null || echo 'version unknown')"
+  else
+    info "Installing redocly..."
+    install_npm_global "@redocly/cli" \
+      && ok "redocly installed" \
+      || warn "Failed to install redocly"
+  fi
+
+  # markdownlint-cli2 (Node — Markdown linter)
+  if command -v markdownlint-cli2 &>/dev/null; then
+    ok "markdownlint-cli2 already installed: $(markdownlint-cli2 --version 2>/dev/null || echo 'version unknown')"
+  else
+    info "Installing markdownlint-cli2..."
+    install_npm_global markdownlint-cli2 \
+      && ok "markdownlint-cli2 installed" \
+      || warn "Failed to install markdownlint-cli2"
+  fi
+
+  # vale (Go binary — prose style linter)
+  if command -v vale &>/dev/null; then
+    ok "vale already installed: $(vale --version 2>/dev/null | head -1)"
+  else
+    info "Installing vale..."
+    VALE_INSTALLED=false
+    if command -v brew &>/dev/null; then
+      brew install vale 2>/dev/null && VALE_INSTALLED=true
+    fi
+    if [[ "${VALE_INSTALLED}" == "false" ]] && command -v go &>/dev/null; then
+      GOBIN="${LOCAL_BIN}" go install github.com/errata-ai/vale/v3@latest 2>/dev/null && VALE_INSTALLED=true
+    fi
+    if [[ "${VALE_INSTALLED}" == "false" ]]; then
+      VALE_ARCH="$(uname -m)"
+      case "${OS}-${VALE_ARCH}" in
+        Linux-x86_64)   VALE_TARGET="Linux_64-bit" ;;
+        Linux-aarch64)  VALE_TARGET="Linux_arm64" ;;
+        Darwin-x86_64)  VALE_TARGET="macOS_64-bit" ;;
+        Darwin-arm64)   VALE_TARGET="macOS_arm64" ;;
+        *)              VALE_TARGET="" ;;
+      esac
+      if [[ -n "${VALE_TARGET}" ]]; then
+        VALE_URL="$(curl -sfL https://api.github.com/repos/errata-ai/vale/releases/latest \
+          | grep "browser_download_url.*${VALE_TARGET}.*tar.gz\"" \
+          | head -1 | cut -d '"' -f 4)"
+        if [[ -n "${VALE_URL}" ]]; then
+          curl -sfL "${VALE_URL}" | tar xz -C "${LOCAL_BIN}" vale 2>/dev/null && VALE_INSTALLED=true
+        fi
+      fi
+    fi
+    if [[ "${VALE_INSTALLED}" == "true" ]]; then
+      ok "vale installed"
+    else
+      warn "Failed to install vale — install manually: brew install vale"
+    fi
+  fi
 else
   info "Skipping tool dependencies (mode: ${INSTALL_MODE})"
 fi
@@ -439,6 +506,21 @@ if [[ "${INSTALL_MODE}" == "all" || "${INSTALL_MODE}" == "configs" ]]; then
       ok "OWASP rules downloaded (${RULE_COUNT} rules) to ${SEMGREP_DIR}/"
     else
       warn "Failed to download OWASP rules — semgrep will use custom taint rules only"
+    fi
+  fi
+
+  # Sync Vale styles (write-good, proselint) into user defaults dir
+  VALE_STYLES_DIR="${CONFIG_DIR}/vale-styles"
+  if command -v vale &>/dev/null && [[ -f "${CONFIG_DIR}/.vale.ini" ]]; then
+    if [[ -d "${VALE_STYLES_DIR}" ]] && [[ "${OVERWRITE}" == "false" ]]; then
+      ok "Vale styles already synced at ${VALE_STYLES_DIR}/"
+    else
+      info "Syncing Vale styles (write-good, proselint)..."
+      if (cd "${CONFIG_DIR}" && vale sync 2>/dev/null); then
+        ok "Vale styles synced to ${VALE_STYLES_DIR}/"
+      else
+        warn "Failed to sync Vale styles — run: cd ${CONFIG_DIR} && vale sync"
+      fi
     fi
   fi
 else
