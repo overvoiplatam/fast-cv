@@ -11,6 +11,24 @@ INSTALL_DIR="${HOME}/.local/share/fast-cv"
 CONFIG_DIR="${HOME}/.config/fast-cv/defaults"
 LOCAL_BIN="${HOME}/.local/bin"
 
+# Ensure binaries we just installed are discoverable for the rest of this script.
+# Without this, `command -v vale` fails after `go install GOBIN=${LOCAL_BIN}` on
+# machines where ~/.local/bin isn't already in PATH, and downstream steps silently skip.
+mkdir -p "${LOCAL_BIN}"
+case ":${PATH}:" in
+  *":${LOCAL_BIN}:"*) ;;
+  *) export PATH="${LOCAL_BIN}:${PATH}" ;;
+esac
+# Also add common Go/Homebrew bin dirs so `command -v vale` finds them when newly installed.
+for extra in "${HOME}/go/bin" "/opt/homebrew/bin" "/usr/local/bin"; do
+  if [[ -d "${extra}" ]]; then
+    case ":${PATH}:" in
+      *":${extra}:"*) ;;
+      *) export PATH="${extra}:${PATH}" ;;
+    esac
+  fi
+done
+
 # Colors (disabled if NO_COLOR is set)
 if [[ -z "${NO_COLOR:-}" ]]; then
   RED='\033[0;31m'
@@ -510,25 +528,41 @@ if [[ "${INSTALL_MODE}" == "all" || "${INSTALL_MODE}" == "configs" ]]; then
   fi
 
   # Sync Vale styles into BOTH defaults dirs (user defaults + package defaults).
-  # Fast-cv's config resolver may pick either path depending on whether a project has a local config.
+  # Fast-cv's config resolver may pick either path depending on whether a project has a local config,
+  # so both need populated styles for vale to run without E201 errors.
+  find_vale_bin() {
+    if command -v vale &>/dev/null; then command -v vale; return 0; fi
+    for candidate in "${LOCAL_BIN}/vale" "${HOME}/go/bin/vale" "/opt/homebrew/bin/vale" "/usr/local/bin/vale"; do
+      if [[ -x "${candidate}" ]]; then echo "${candidate}"; return 0; fi
+    done
+    return 1
+  }
+
   sync_vale_styles() {
     local dir="$1"
+    local vale_bin="$2"
     if [[ ! -f "${dir}/.vale.ini" ]]; then return 0; fi
     if [[ -d "${dir}/vale-styles" ]] && [[ "${OVERWRITE}" == "false" ]]; then
       ok "Vale styles already synced at ${dir}/vale-styles/"
       return 0
     fi
     info "Syncing Vale styles in ${dir}..."
-    if (cd "${dir}" && vale sync 2>/dev/null); then
+    local sync_out
+    if sync_out=$(cd "${dir}" && "${vale_bin}" sync 2>&1); then
       ok "Vale styles synced to ${dir}/vale-styles/"
     else
-      warn "Failed to sync Vale styles — run: cd ${dir} && vale sync"
+      warn "Failed to sync Vale styles in ${dir}:"
+      echo "${sync_out}" | head -5 | sed 's/^/    /'
+      warn "Retry manually: cd ${dir} && vale sync"
     fi
   }
 
-  if command -v vale &>/dev/null; then
-    sync_vale_styles "${CONFIG_DIR}"
-    sync_vale_styles "${SCRIPT_DIR}/defaults"
+  if VALE_BIN=$(find_vale_bin); then
+    sync_vale_styles "${CONFIG_DIR}" "${VALE_BIN}"
+    sync_vale_styles "${SCRIPT_DIR}/defaults" "${VALE_BIN}"
+  else
+    warn "vale binary not found on PATH or common locations — skipping style sync"
+    warn "  Install vale, then re-run: ./install.sh --mode configs"
   fi
 else
   info "Skipping config files (mode: ${INSTALL_MODE})"
