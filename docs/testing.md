@@ -44,6 +44,13 @@ node --test --test-name-pattern="ruff" test/tools/ruff.test.js  # single tool
 | `test/tools/clippy.test.js` | Metadata, JSON Lines parsing, DOCS/BUG/REFACTOR classification |
 | `test/tools/stylelint.test.js` | Metadata, CSS/SCSS linting, JSON parsing |
 | `test/tools/sqlfluff.test.js` | Metadata, SQL linting, JSON parsing |
+| `test/tools/docspec.test.js` | Adapter metadata, classifier, offset→line/col helper |
+| `test/tools/docspec-runner.test.js` | End-to-end: parse → classify → validate → JSON Lines findings across fixtures |
+| `test/tools/docspec-fix.test.js` | `--fix` whitelist: path-prefix and swagger-version quoting |
+| `test/tools/docspec-refs.test.js` | Remote `$ref` resolver: timeout, size cap, allowlist, disabled, cache |
+| `test/tools/spectral.test.js` | buildCommand, preFixCommands (redocly bundle), JSON parse |
+| `test/tools/markdownlint.test.js` | buildCommand, stderr parse into findings, fix flag |
+| `test/tools/vale.test.js` | buildCommand, JSON parse, severity mapping (suggestion → warning) |
 
 ## Contract Test Pattern
 

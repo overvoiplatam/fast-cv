@@ -23,6 +23,10 @@ A local, offline CLI tool that orchestrates multiple linters and security scanne
 | [clippy](https://github.com/rust-lang/rust-clippy) | Rust | `[LINTER]` `[BUG]` `[REFACTOR]` |
 | [stylelint](https://stylelint.io) | CSS, SCSS, SASS, LESS | `[LINTER]` `[FORMAT]` |
 | [sqlfluff](https://sqlfluff.com) | SQL | `[LINTER]` `[FORMAT]` `[BUG]` |
+| docspec (bundled) | OpenAPI 3.x, Swagger 2.0, AsyncAPI 2.x/3.x, JSON Schema (YAML/JSON) | `[DOCS]` |
+| [spectral](https://stoplight.io/open-source/spectral) | OpenAPI, AsyncAPI, JSON Schema (YAML/JSON) | `[DOCS]` |
+| [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) | Markdown | `[DOCS]` |
+| [vale](https://vale.sh) | Markdown, reStructuredText, AsciiDoc, plain text | `[DOCS]` |
 
 Tools are automatically selected based on detected file types. Missing tools are skipped gracefully. Tools marked **(opt-in)** only run when explicitly requested via `--tools`.
 
@@ -47,6 +51,8 @@ What fast-cv checks per language. Columns use checkmarks for clarity; tool names
 | **Scala** | — | semgrep | — | — | — | — | jscpd | typos | — |
 | **SQL** | sqlfluff | — | trivy | — | — | — | jscpd | typos | — |
 | **CSS/SCSS** | stylelint | — | — | — | — | — | jscpd | typos | — |
+| **OpenAPI / AsyncAPI / JSON Schema** | docspec + spectral | — | — | — | — | — | — | — | — |
+| **Markdown / prose** | markdownlint + vale | — | — | — | — | — | — | — | — |
 
 \* typos is an **opt-in** tool (requires `--tools=typos`).
 
@@ -94,11 +100,13 @@ When a previous installation is detected, the installer prompts you to choose:
 ### Requirements
 
 - Node.js >= 20
-- npm (for eslint, jscpd, knip, tsc, stylelint, and plugins)
+- npm (for eslint, jscpd, knip, tsc, stylelint, spectral, redocly, markdownlint-cli2, and plugins)
 - git
 - python3 plus pipx, uv, or pip3 (for ruff, semgrep, mypy, vulture, sqlfluff)
-- curl (for bearer, golangci-lint, trivy installers, typos fallback, and OWASP rules download)
+- curl (for bearer, golangci-lint, trivy installers, typos/vale fallbacks, and OWASP rules download)
 - Rust toolchain/rustup (optional, for typos-cli and clippy: `rustup component add clippy`)
+- Go (optional, for vale fallback via `go install github.com/errata-ai/vale/v3`)
+- brew (optional, preferred path for vale on macOS/Linuxbrew)
 
 `install.sh --mode all` attempts to install every supported tool so the same CI image or developer machine can validate many project types. Tools that cannot be installed are reported as warnings; coverage is reduced until they are installed.
 

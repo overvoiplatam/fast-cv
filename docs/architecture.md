@@ -19,7 +19,7 @@ Node.js ESM CLI that orchestrates linters and security scanners sequentially, ou
 | `src/line-check.js` | Built-in file length checker |
 | `src/git-changes.js` | Git-changed file detection |
 | `src/version.js` | Shared package version metadata |
-| `src/tools/index.js` | Tool registry — exports all 15 adapters |
+| `src/tools/index.js` | Tool registry — exports all 19 adapters |
 | `src/tools/ruff.js` | Python linter/formatter |
 | `src/tools/eslint.js` | JavaScript/TypeScript linter |
 | `src/tools/semgrep.js` | Multi-language SAST |
@@ -35,6 +35,10 @@ Node.js ESM CLI that orchestrates linters and security scanners sequentially, ou
 | `src/tools/clippy.js` | Rust linter (clippy) |
 | `src/tools/stylelint.js` | CSS/SCSS/Less linter |
 | `src/tools/sqlfluff.js` | SQL linter |
+| `src/tools/docspec.js` + `src/tools/docspec/` | Pure-Node OpenAPI/Swagger/AsyncAPI/JSON Schema validator (classify → validate → fix → resolve $ref) |
+| `src/tools/spectral.js` | Spectral wrapper for full OAS/AsyncAPI/JSON Schema conformance |
+| `src/tools/markdownlint.js` | markdownlint-cli2 wrapper (Markdown lint, native --fix) |
+| `src/tools/vale.js` | Vale wrapper (prose style across .md/.rst/.adoc/.txt) |
 | `defaults/` | Shipped baseline configs |
 | `install.sh` | Full installer (modes: all, app, configs) |
 

@@ -74,6 +74,6 @@ Every change must satisfy:
 ## Deep Context
 
 - [docs/architecture.md](docs/architecture.md) — pipeline, data flow, data contracts, security model
-- [docs/tools.md](docs/tools.md) — adapter interface, all 15 tools, tag reference
+- [docs/tools.md](docs/tools.md) — adapter interface, all 19 tools, tag reference
 - [docs/configuration.md](docs/configuration.md) — config resolution, defaults, ignore system, CLI flags
 - [docs/testing.md](docs/testing.md) — test patterns, conventions, how to add tests

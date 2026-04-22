@@ -41,7 +41,7 @@ node bin/fast-cv.js --tools=eslint --fix .     # fix eslint only
 node bin/fast-cv.js --fix --git-only .         # fix only git-changed files
 ```
 
-**Note:** `--fix` runs only fix-capable tools (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff), applies fixes, outputs a summary to stderr, and exits 0 when fix tools complete. Tool execution errors exit 2. No findings report is generated. With shipped default configs, `--fix` only applies formatting changes (safe). Full semantic fix requires a local project config.
+**Note:** `--fix` runs only fix-capable tools (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff, docspec, spectral, markdownlint), applies fixes, outputs a summary to stderr, and exits 0 when fix tools complete. Tool execution errors exit 2. No findings report is generated. With shipped default configs, `--fix` only applies formatting changes (safe). Full semantic fix requires a local project config.
 
 ### Suppress docstring warnings
 
