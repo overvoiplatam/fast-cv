@@ -67,11 +67,19 @@ describe('spectral adapter', () => {
     const f = spectral.parseOutput(stdout, '', 0);
     assert.equal(f.length, 2);
     assert.equal(f[0].rule, 'spectral/oas3-valid-media-example');
-    assert.equal(f[0].severity, 'error');
+    assert.equal(f[0].severity, 'error');   // sev 0 → error
     assert.equal(f[0].line, 10);
     assert.equal(f[0].col, 5);
-    assert.equal(f[1].severity, 'warning');
+    assert.equal(f[1].severity, 'warning'); // sev 2 → warning
     assert.equal(f[0].tag, 'DOCS');
+  });
+
+  it('parseOutput maps severity 1 (warn) to warning, not error', () => {
+    const stdout = JSON.stringify([
+      { source: '/p/a.yaml', code: 'info-contact', message: 'x', severity: 1, range: { start: { line: 0, character: 0 } } },
+    ]);
+    const f = spectral.parseOutput(stdout, '', 0);
+    assert.equal(f[0].severity, 'warning');
   });
 
   it('parseOutput returns empty for no findings', () => {

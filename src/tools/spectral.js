@@ -56,7 +56,7 @@ export default {
         col: Number.isFinite(start.character) ? start.character + 1 : undefined,
         tag: 'DOCS',
         rule: `spectral/${item.code || 'unknown'}`,
-        severity: sev <= 1 ? 'error' : 'warning',
+        severity: sev === 0 ? 'error' : 'warning',
         message: item.message || '',
       };
     });

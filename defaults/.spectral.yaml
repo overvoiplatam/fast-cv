@@ -7,10 +7,17 @@ extends:
   - [spectral:asyncapi, recommended]
 
 rules:
-  # Downgrade: real but rarely load-bearing in early-stage docs
-  operation-operationId: warn
+  # Turn off rules that are noisy on real-world specs but rarely block consumers.
+  # Users who want stricter validation can re-enable these in a local .spectral.yaml.
+  oas3-unused-component: off      # Common in auto-generated specs with shared schemas
+  operation-operationId: warn     # Nice to have, not load-bearing
+  operation-description: warn
+  operation-tag-defined: warn
   operation-tags: warn
+  info-contact: warn
   info-description: warn
+  info-license: warn
+  tag-description: warn
 
 overrides:
   # Looser rules on test fixtures and generated output

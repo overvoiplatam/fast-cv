@@ -509,19 +509,26 @@ if [[ "${INSTALL_MODE}" == "all" || "${INSTALL_MODE}" == "configs" ]]; then
     fi
   fi
 
-  # Sync Vale styles (write-good, proselint) into user defaults dir
-  VALE_STYLES_DIR="${CONFIG_DIR}/vale-styles"
-  if command -v vale &>/dev/null && [[ -f "${CONFIG_DIR}/.vale.ini" ]]; then
-    if [[ -d "${VALE_STYLES_DIR}" ]] && [[ "${OVERWRITE}" == "false" ]]; then
-      ok "Vale styles already synced at ${VALE_STYLES_DIR}/"
-    else
-      info "Syncing Vale styles (write-good, proselint)..."
-      if (cd "${CONFIG_DIR}" && vale sync 2>/dev/null); then
-        ok "Vale styles synced to ${VALE_STYLES_DIR}/"
-      else
-        warn "Failed to sync Vale styles — run: cd ${CONFIG_DIR} && vale sync"
-      fi
+  # Sync Vale styles into BOTH defaults dirs (user defaults + package defaults).
+  # Fast-cv's config resolver may pick either path depending on whether a project has a local config.
+  sync_vale_styles() {
+    local dir="$1"
+    if [[ ! -f "${dir}/.vale.ini" ]]; then return 0; fi
+    if [[ -d "${dir}/vale-styles" ]] && [[ "${OVERWRITE}" == "false" ]]; then
+      ok "Vale styles already synced at ${dir}/vale-styles/"
+      return 0
     fi
+    info "Syncing Vale styles in ${dir}..."
+    if (cd "${dir}" && vale sync 2>/dev/null); then
+      ok "Vale styles synced to ${dir}/vale-styles/"
+    else
+      warn "Failed to sync Vale styles — run: cd ${dir} && vale sync"
+    fi
+  }
+
+  if command -v vale &>/dev/null; then
+    sync_vale_styles "${CONFIG_DIR}"
+    sync_vale_styles "${SCRIPT_DIR}/defaults"
   fi
 else
   info "Skipping config files (mode: ${INSTALL_MODE})"
