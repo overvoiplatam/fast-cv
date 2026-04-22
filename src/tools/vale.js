@@ -23,12 +23,32 @@ export default {
   },
 
   parseOutput(stdout, stderr, exitCode) {
+    const raw = stdout.trim() || stderr.trim();
+    if (!raw) return [];
+
+    // Vale emits config/style errors as a single non-array JSON object (usually on stderr).
+    // Parse those into an actionable tool error rather than dumping the JSON blob.
+    if (raw.startsWith('{')) {
+      try {
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj === 'object' && typeof obj.Code === 'string' && obj.Code.startsWith('E')) {
+          const hint = obj.Code === 'E201'
+            ? 'run `vale sync` in your Vale config directory to populate styles'
+            : 'check your .vale.ini configuration';
+          throw new Error(`vale ${obj.Code}: ${obj.Text || 'config error'} — ${hint}`);
+        }
+      } catch (err) {
+        if (err.message.startsWith('vale ')) throw err;
+      }
+    }
+
     if (!stdout.trim()) {
       if (exitCode > 1 && stderr.trim()) {
         throw new Error(`vale error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
       }
       return [];
     }
+
     let doc;
     try {
       doc = JSON.parse(stdout);

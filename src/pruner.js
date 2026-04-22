@@ -57,6 +57,9 @@ export const HARDCODED_IGNORES = [
   '.idea',
   '.vscode',
 
+  // Agent sandboxes (Claude Code worktrees, agent scratch dirs)
+  '.claude',
+
   // Build tools / caches
   '.gradle',
   '.cargo',

@@ -56,13 +56,23 @@ describe('pruneDirectory', () => {
   it('ignores non-scannable files', async () => {
     await writeFile(join(tmpDir, 'image.png'), '');
     await writeFile(join(tmpDir, 'doc.pdf'), '');
-    await writeFile(join(tmpDir, 'readme.md'), '');
+    await writeFile(join(tmpDir, 'archive.zip'), '');
 
     const { files } = await pruneDirectory(tmpDir);
 
     assert.ok(!files.includes('image.png'));
     assert.ok(!files.includes('doc.pdf'));
-    assert.ok(!files.includes('readme.md'));
+    assert.ok(!files.includes('archive.zip'));
+  });
+
+  it('scans markdown and prose files', async () => {
+    await writeFile(join(tmpDir, 'readme.md'), '# x');
+    await writeFile(join(tmpDir, 'notes.txt'), 'x');
+
+    const { files } = await pruneDirectory(tmpDir);
+
+    assert.ok(files.includes('readme.md'));
+    assert.ok(files.includes('notes.txt'));
   });
 
   it('respects .gitignore patterns', async () => {

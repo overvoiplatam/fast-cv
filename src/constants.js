@@ -20,6 +20,7 @@ export const SCANNABLE_EXTENSIONS = [
   '.sql',
   '.css', '.scss', '.sass', '.less',
   '.svelte', '.vue',
+  '.md', '.markdown', '.rst', '.adoc', '.txt',
 ];
 
 export function parseJsonLines(stdout) {

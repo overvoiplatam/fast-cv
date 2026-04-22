@@ -59,6 +59,17 @@ describe('vale adapter', () => {
     assert.throws(() => vale.parseOutput('not json {', '', 0));
   });
 
+  it('parseOutput throws actionable error on vale config error (E201) from stderr', () => {
+    const stderr = JSON.stringify({
+      Line: 1,
+      Path: '/etc/.vale.ini',
+      Text: "The path '/etc/vale-styles' does not exist.",
+      Code: 'E201',
+      Span: 14,
+    });
+    assert.throws(() => vale.parseOutput('', stderr, 2), /E201.*vale sync/);
+  });
+
   it('checkInstalled returns boolean', async () => {
     const v = await vale.checkInstalled();
     assert.equal(typeof v, 'boolean');
