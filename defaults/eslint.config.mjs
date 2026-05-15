@@ -37,7 +37,8 @@ const config = [
     rules: {
       ...(sonarjs.configs?.recommended?.rules ?? {}),
       "sonarjs/cognitive-complexity": ["warn", 15],
-      "sonarjs/no-duplicate-string": ["warn", 3],
+      // sonarjs v4 schema: { threshold } object, not a bare number
+      "sonarjs/no-duplicate-string": ["warn", { threshold: 3 }],
       "sonarjs/max-switch-cases": ["warn", 10],
       "sonarjs/no-identical-functions": "warn",
     },
