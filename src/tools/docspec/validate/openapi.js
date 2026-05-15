@@ -2,6 +2,7 @@ import { isObject, finding, emitRemoteRefFindings } from './common.js';
 
 const HTTP_METHODS = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- walks every OpenAPI structural check (paths, methods, params, responses) in one place
 export function validateOpenapi(ctx) {
   const findings = [];
   const { data } = ctx;

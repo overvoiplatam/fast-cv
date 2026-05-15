@@ -33,6 +33,7 @@ export default {
     return { bin: 'bearer', args, cwd: targetDir };
   },
 
+  // eslint-disable-next-line complexity -- maps bearer's nested severity/category JSON to flat findings
   parseOutput(stdout, stderr, exitCode) {
     // bearer exits: 0 = clean, 1 = findings, 2+ = error
     if (!stdout.trim()) {

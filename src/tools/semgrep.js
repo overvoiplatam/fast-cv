@@ -6,7 +6,6 @@ const execFileAsync = promisify(execFile);
 function classifySemgrepSeverity(metadata) {
   const category = metadata?.category || '';
   const impact = metadata?.impact || '';
-  const confidence = metadata?.confidence || '';
 
   if (category === 'security' || impact === 'HIGH' || impact === 'MEDIUM') return 'SECURITY';
   if (category === 'correctness') return 'BUG';

@@ -15,7 +15,7 @@ export default {
   extensions: ['.py', '.js', '.ts', '.go', '.java', '.rb', '.php', '.tf', '.yaml', '.yml', '.rs', '.kt', '.kts', '.cs', '.c', '.cpp', '.swift', '.sql'],
   installHint: 'curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ~/.local/bin',
 
-  buildCommand(targetDir, configPath, { files = [], fix = false, licenses = false, updateDb = false } = {}) {
+  buildCommand(targetDir, configPath, { files: _files = [], fix: _fix = false, licenses = false, updateDb = false } = {}) {
     const scanners = licenses ? 'vuln,misconfig,secret,license' : 'vuln,misconfig,secret';
     const args = [
       'fs',
@@ -38,6 +38,7 @@ export default {
     return { bin: 'trivy', args };
   },
 
+  // eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- handles 5 trivy result shapes (Vulnerabilities/Misconfigurations/Secrets/Licenses/SBOM) plus DB-cache error normalization
   parseOutput(stdout, stderr, exitCode) {
     if (!stdout.trim()) {
       if (exitCode > 0 && stderr.trim()) {

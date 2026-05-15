@@ -1,4 +1,3 @@
-import { relative, isAbsolute } from 'node:path';
 import { collectFindings } from './findings.js';
 import { VERSION } from './version.js';
 

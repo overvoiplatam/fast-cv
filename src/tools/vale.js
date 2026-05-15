@@ -22,6 +22,7 @@ export default {
     return { bin: 'vale', args, cwd: targetDir };
   },
 
+  // eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- vale's JSON output is keyed by file; we walk every alert and classify by rule prefix
   parseOutput(stdout, stderr, exitCode) {
     const raw = stdout.trim() || stderr.trim();
     if (!raw) return [];

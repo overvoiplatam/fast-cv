@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
+// eslint-disable-next-line complexity -- applies the safe-fix whitelist for OpenAPI/Swagger/AsyncAPI; each branch is one fix kind
 export function applyFixes(filename, source, isYaml, data) {
   const edits = [];
 

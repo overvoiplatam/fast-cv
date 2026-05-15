@@ -24,7 +24,7 @@ export default {
   extensions: [...SCANNABLE_EXTENSIONS],
   installHint: 'npm install -g jscpd',
 
-  buildCommand(targetDir, configPath, { files = [], exclude = [] } = {}) {
+  buildCommand(targetDir, configPath, { files: _files = [], exclude = [] } = {}) {
     const outDir = getTmpDir();
 
     // Generate temp config with ignore patterns (jscpd's --ignore CLI flag
@@ -54,6 +54,7 @@ export default {
     return { bin: 'jscpd', args, cwd: targetDir };
   },
 
+  // eslint-disable-next-line complexity -- reads JSON report file, falls back across exit codes, dedupes duplication entries by pair
   parseOutput(stdout, stderr, exitCode) {
     const outDir = _tmpDir;
     _tmpDir = null; // reset for next invocation
@@ -69,7 +70,7 @@ export default {
     try {
       const raw = readFileSync(join(outDir, 'jscpd-report.json'), 'utf-8');
       report = JSON.parse(raw);
-    } catch (err) {
+    } catch {
       // Clean up and return empty if no report file
       try { rmSync(outDir, { recursive: true, force: true }); } catch { /* noop */ }
       if (exitCode > 1) {

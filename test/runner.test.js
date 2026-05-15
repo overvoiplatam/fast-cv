@@ -159,7 +159,7 @@ describe('runTools', () => {
 
   it('passes files and fix to buildCommand', async () => {
     let receivedOpts = {};
-    const results = await runOne(
+    await runOne(
       makeTool('opts-tool', {
         buildCommand(targetDir, configPath, opts) {
           receivedOpts = opts;

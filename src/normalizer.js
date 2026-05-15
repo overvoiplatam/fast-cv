@@ -36,6 +36,7 @@ export function filterFindings(results, targetDir, ignoreFilter, onlyFilter, { v
   });
 }
 
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- markdown formatter walks all finding tags + tool-error + warning sections in one pass
 export function formatReport({ targetDir, results, warnings = [], fix = false, fileCount = 0 }) {
   const lines = [];
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
