@@ -24,7 +24,12 @@ export function getScanExitCode(results) {
 
 export async function run(argv) {
   const program = new Command();
+  configureScanCommand(program);
+  configureInstallHookCommand(program);
+  await program.parseAsync(argv);
+}
 
+function configureScanCommand(program) {
   program
     .name('fast-cv')
     .description('Fast Code Validation — sequential linters & security scanners with unified Markdown reports')
@@ -45,220 +50,285 @@ export async function run(argv) {
     .option('--no-docstring', 'suppress documentation findings (DOCS tag)', false)
     .option('--git-only [scope]', 'scan only git-changed files (default: uncommitted+unpushed; use --git-only=uncommitted for uncommitted only)', false)
     .addOption(new Option('-f, --format <type>', 'output format').choices(['markdown', 'sarif']).default('markdown'))
-    .action(async (directory, options) => {
-      const targetDir = resolve(directory);
+    .action(executeScanAction);
+}
 
-      try {
-        accessSync(targetDir, constants.R_OK);
-      } catch {
-        process.stderr.write(`Error: directory not found or not readable: ${targetDir}\n`);
-        process.exit(EXIT_PRECHECK_FAILED);
-      }
+async function executeScanAction(directory, options) {
+  const targetDir = resolve(directory);
+  ensureReadable(targetDir);
 
-      // SBOM generation — early exit, bypasses normal scan pipeline
-      if (options.sbom) {
-        const trivyTool = allTools.find(t => t.name === 'trivy');
-        const installed = trivyTool && await trivyTool.checkInstalled();
-        if (!installed) {
-          process.stderr.write(`Error: trivy is required for SBOM generation. ${trivyTool?.installHint || ''}\n`);
-          process.exit(EXIT_PRECHECK_FAILED);
-        }
-        const { spawn: spawnProc } = await import('node:child_process');
-        const trivyArgs = [
-          'fs',
-          '--format', 'cyclonedx',
-          '--quiet',
-        ];
-        if (!options.updateDb) {
-          trivyArgs.push(
-            '--offline-scan',
-            '--skip-db-update',
-            '--skip-java-db-update',
-            '--skip-check-update',
-            '--skip-vex-repo-update',
-          );
-        }
-        trivyArgs.push(targetDir);
-        const proc = spawnProc('trivy', trivyArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-        let stdout = '', stderr = '';
-        proc.stdout.on('data', c => { stdout += c; });
-        proc.stderr.on('data', c => { stderr += c; });
-        await new Promise(r => proc.on('close', r));
-        if (!stdout.trim()) {
-          const updateAdvice = /db|database|metadata|cache|download|update/i.test(stderr)
-            ? ' Run fast-cv with --update-db --sbom . to refresh the trivy databases before generating the SBOM.'
-            : '';
-          process.stderr.write(`trivy SBOM error: ${stderr.slice(0, 500)}${updateAdvice}\n`);
-          process.exit(EXIT_PRECHECK_FAILED);
-        }
-        process.stdout.write(stdout);
-        process.exit(EXIT_CLEAN);
-      }
+  if (options.sbom) return runSbomFlow(targetDir, options);
 
-      const timeout = options.timeout == null ? 0 : parseInt(options.timeout, 10) * 1000;
-      const verbose = options.verbose;
-      const exclude = options.exclude
-        ? options.exclude.split(',').map(s => s.trim()).filter(Boolean)
-        : [];
-      const only = options.only
-        ? options.only.split(',').map(s => s.trim()).filter(Boolean)
-        : [];
-      const fix = options.fix;
-      const licenses = options.licenses;
-      const updateDb = options.updateDb;
-      const maxLines = parseInt(options.maxLines, 10);
-      const maxLinesOmit = options.maxLinesOmit
-        ? options.maxLinesOmit.split(',').map(s => s.trim()).filter(Boolean)
-        : [];
-      const fmt = options.format === 'sarif' ? formatSarif : formatReport;
+  const parsed = parseScanOptions(options);
+  const gitFiles = await resolveGitOnlyFiles(targetDir, options, parsed);
+  if (gitFiles === EXIT_SENTINEL) return; // handled inside
 
-      // Resolve --git-only: false (off), true/string "all" (default), "uncommitted"
-      let gitFiles = null;
-      if (options.gitOnly !== false) {
-        const scope = (options.gitOnly === true || options.gitOnly === 'all') ? 'all' : 'uncommitted';
-        try {
-          gitFiles = await getGitChangedFiles(targetDir, scope);
-        } catch (e) {
-          process.stderr.write(`Error: ${e.message}\n`);
-          process.exit(EXIT_PRECHECK_FAILED);
-        }
-        if (gitFiles.length === 0) {
-          if (verbose) process.stderr.write('No git-changed files found.\n');
-          if (fix) {
-            process.stderr.write('Nothing to fix (clean working tree).\n');
-            process.exit(EXIT_CLEAN);
-          }
-          process.stdout.write(fmt({ targetDir, results: [], warnings: ['No git-changed files found (clean working tree).'] }));
-          process.exit(EXIT_CLEAN);
-        }
-        if (verbose) process.stderr.write(`Git-changed files: ${gitFiles.length}\n`);
-      }
+  const pruneResult = await pruneOrExit(targetDir, parsed, gitFiles);
+  if (pruneResult === EXIT_SENTINEL) return;
+  const { files, languages, ignoreFilter, onlyFilter } = pruneResult;
 
-      // Step 1: Prune directory
-      if (verbose) process.stderr.write(`Scanning ${targetDir}...\n`);
-      const { files, languages, ignoreFilter, onlyFilter } = await pruneDirectory(targetDir, { exclude, only, gitFiles });
-      if (verbose) process.stderr.write(`Found ${files.length} files, languages: ${[...languages].join(', ')}\n`);
+  const applicableTools = selectApplicableTools(languages, options);
+  if (applicableTools.length === 0) {
+    exitForNoApplicableTools(parsed, targetDir);
+    return;
+  }
 
-      if (files.length === 0) {
-        if (fix) {
-          process.stderr.write('No fixable files found.\n');
-          process.exit(EXIT_CLEAN);
-        }
-        process.stdout.write(fmt({ targetDir, results: [], warnings: ['No scannable files found.'] }));
-        process.exit(EXIT_CLEAN);
-      }
+  const precheckResult = await precheck(applicableTools, {
+    autoInstall: options.autoInstall, verbose: parsed.verbose,
+  });
+  if (!precheckResult.ok) {
+    process.stderr.write(precheckResult.message);
+    process.exit(EXIT_PRECHECK_FAILED);
+  }
 
-      // Step 2: Filter tools by detected languages and --tools flag
-      const requested = options.tools
-        ? options.tools.split(',').map(s => s.trim().toLowerCase())
-        : null;
+  if (parsed.fix) {
+    await runFixOnlyFlow(precheckResult.tools, targetDir, parsed, files);
+    return;
+  }
 
-      let applicableTools = allTools.filter(tool => {
-        const hasExtension = tool.extensions.some(ext => languages.has(ext));
-        if (!hasExtension) return false;
-        // Opt-in tools only run when explicitly requested via --tools
-        if (tool.optIn && (!requested || !requested.includes(tool.name))) return false;
-        return true;
-      });
+  await runScanFlow(precheckResult, targetDir, parsed, { files, ignoreFilter, onlyFilter });
+}
 
-      if (requested) {
-        applicableTools = applicableTools.filter(t => requested.includes(t.name));
-      }
+const EXIT_SENTINEL = Symbol('exit');
 
-      if (applicableTools.length === 0) {
-        if (fix) {
-          process.stderr.write('No fix-capable tools found for detected languages.\n');
-          process.exit(EXIT_CLEAN);
-        }
-        process.stdout.write(fmt({ targetDir, results: [], warnings: ['No applicable tools for detected languages.'] }));
-        process.exit(EXIT_CLEAN);
-      }
+function ensureReadable(targetDir) {
+  try {
+    accessSync(targetDir, constants.R_OK);
+  } catch {
+    process.stderr.write(`Error: directory not found or not readable: ${targetDir}\n`);
+    process.exit(EXIT_PRECHECK_FAILED);
+  }
+}
 
-      // Step 3: Precheck — verify tools are installed
-      const precheckResult = await precheck(applicableTools, { autoInstall: options.autoInstall, verbose });
-      if (!precheckResult.ok) {
-        process.stderr.write(precheckResult.message);
-        process.exit(EXIT_PRECHECK_FAILED);
-      }
+function parseScanOptions(options) {
+  return {
+    timeout: options.timeout == null ? 0 : parseInt(options.timeout, 10) * 1000,
+    verbose: options.verbose,
+    exclude: splitCsv(options.exclude),
+    only: splitCsv(options.only),
+    fix: options.fix,
+    licenses: options.licenses,
+    updateDb: options.updateDb,
+    maxLines: parseInt(options.maxLines, 10),
+    maxLinesOmit: splitCsv(options.maxLinesOmit),
+    fmt: options.format === 'sarif' ? formatSarif : formatReport,
+    noDocstring: options.noDocstring,
+  };
+}
 
-      const readyTools = precheckResult.tools;
+function splitCsv(value) {
+  if (!value) return [];
+  return value.split(',').map(s => s.trim()).filter(Boolean);
+}
 
-      // Fix-only mode: run only fix-capable tools, apply fixes, exit
-      if (fix) {
-        const fixTools = readyTools.filter(t => t.supportsFix);
-        if (fixTools.length === 0) {
-          process.stderr.write('No fix-capable tools found for detected languages.\n');
-          process.exit(EXIT_CLEAN);
-        }
+async function resolveGitOnlyFiles(targetDir, options, parsed) {
+  if (options.gitOnly === false) return null;
+  const scope = (options.gitOnly === true || options.gitOnly === 'all') ? 'all' : 'uncommitted';
+  let gitFiles;
+  try {
+    gitFiles = await getGitChangedFiles(targetDir, scope);
+  } catch (e) {
+    process.stderr.write(`Error: ${e.message}\n`);
+    process.exit(EXIT_PRECHECK_FAILED);
+  }
+  if (gitFiles.length === 0) {
+    handleNoGitChanges(targetDir, parsed);
+    return EXIT_SENTINEL;
+  }
+  if (parsed.verbose) process.stderr.write(`Git-changed files: ${gitFiles.length}\n`);
+  return gitFiles;
+}
 
-        const fixConfigs = await Promise.all(
-          fixTools.map(async tool => ({
-            tool,
-            config: await resolveConfig(tool.name, targetDir),
-          }))
-        );
+function handleNoGitChanges(targetDir, parsed) {
+  if (parsed.verbose) process.stderr.write('No git-changed files found.\n');
+  if (parsed.fix) {
+    process.stderr.write('Nothing to fix (clean working tree).\n');
+    process.exit(EXIT_CLEAN);
+  }
+  process.stdout.write(parsed.fmt({
+    targetDir,
+    results: [],
+    warnings: ['No git-changed files found (clean working tree).'],
+  }));
+  process.exit(EXIT_CLEAN);
+}
 
-        if (verbose) process.stderr.write(`Fixing with ${fixTools.map(t => t.name).join(', ')}...\n`);
-        const results = await runTools(fixConfigs, targetDir, { timeout, verbose, files, fix: true, updateDb, exclude });
+async function pruneOrExit(targetDir, parsed, gitFiles) {
+  if (parsed.verbose) process.stderr.write(`Scanning ${targetDir}...\n`);
+  const result = await pruneDirectory(targetDir, {
+    exclude: parsed.exclude, only: parsed.only, gitFiles,
+  });
+  if (parsed.verbose) {
+    process.stderr.write(`Found ${result.files.length} files, languages: ${[...result.languages].join(', ')}\n`);
+  }
+  if (result.files.length === 0) {
+    handleNoScannableFiles(targetDir, parsed);
+    return EXIT_SENTINEL;
+  }
+  return result;
+}
 
-        const warnings = [];
-        for (const r of results) {
-          if (r.fixSkipped) {
-            warnings.push(`${r.tool}: --fix limited to formatting (using shipped default config)`);
-          }
-        }
+function handleNoScannableFiles(targetDir, parsed) {
+  if (parsed.fix) {
+    process.stderr.write('No fixable files found.\n');
+    process.exit(EXIT_CLEAN);
+  }
+  process.stdout.write(parsed.fmt({
+    targetDir, results: [],
+    warnings: ['No scannable files found.'],
+  }));
+  process.exit(EXIT_CLEAN);
+}
 
-        const toolSummary = results.map(r => `${r.tool} (${(r.duration / 1000).toFixed(1)}s)`).join(', ');
-        process.stderr.write(`Fixed with: ${toolSummary}\n`);
-        for (const w of warnings) process.stderr.write(`  ${w}\n`);
-        const hasToolErrors = results.some(r => r.error);
-        if (hasToolErrors) {
-          for (const r of results.filter(result => result.error)) {
-            process.stderr.write(`  ${r.tool}: ${r.error}\n`);
-          }
-          process.exit(EXIT_PRECHECK_FAILED);
-        }
-        process.exit(EXIT_CLEAN);
-      }
+function selectApplicableTools(languages, options) {
+  const requested = options.tools
+    ? options.tools.split(',').map(s => s.trim().toLowerCase())
+    : null;
+  const byLang = allTools.filter(tool => isToolApplicable(tool, languages, requested));
+  if (!requested) return byLang;
+  return byLang.filter(t => requested.includes(t.name));
+}
 
-      // Step 4: Resolve configs
-      const toolConfigs = await Promise.all(
-        readyTools.map(async tool => ({
-          tool,
-          config: await resolveConfig(tool.name, targetDir),
-        }))
-      );
+function isToolApplicable(tool, languages, requested) {
+  const hasExtension = tool.extensions.some(ext => languages.has(ext));
+  if (!hasExtension) return false;
+  // Opt-in tools only run when explicitly requested via --tools.
+  if (tool.optIn && (!requested || !requested.includes(tool.name))) return false;
+  return true;
+}
 
-      // Step 5: Run tools sequentially
-      // Always pass pruner's file list so tools respect .gitignore, .fcvignore, and hardcoded ignores
-      if (verbose) process.stderr.write(`Running ${readyTools.map(t => t.name).join(', ')}...\n`);
-      const results = await runTools(toolConfigs, targetDir, { timeout, verbose, files, licenses, updateDb, exclude });
+function exitForNoApplicableTools(parsed, targetDir) {
+  if (parsed.fix) {
+    process.stderr.write('No fix-capable tools found for detected languages.\n');
+    process.exit(EXIT_CLEAN);
+  }
+  process.stdout.write(parsed.fmt({
+    targetDir, results: [],
+    warnings: ['No applicable tools for detected languages.'],
+  }));
+  process.exit(EXIT_CLEAN);
+}
 
-      // Step 5b: Built-in line-count check
-      if (maxLines > 0) {
-        const lineResult = await checkFileLines(files, targetDir, { maxLines, omitPatterns: maxLinesOmit });
-        results.push(lineResult);
-      }
+async function runFixOnlyFlow(readyTools, targetDir, parsed, files) {
+  const fixTools = readyTools.filter(t => t.supportsFix);
+  if (fixTools.length === 0) {
+    process.stderr.write('No fix-capable tools found for detected languages.\n');
+    process.exit(EXIT_CLEAN);
+  }
 
-      // Step 6: Post-filter findings through ignore rules
-      const filtered = filterFindings(results, targetDir, ignoreFilter, onlyFilter, { verbose });
+  const fixConfigs = await resolveConfigsFor(fixTools, targetDir);
+  if (parsed.verbose) process.stderr.write(`Fixing with ${fixTools.map(t => t.name).join(', ')}...\n`);
+  const results = await runTools(fixConfigs, targetDir, {
+    timeout: parsed.timeout, verbose: parsed.verbose, files,
+    fix: true, updateDb: parsed.updateDb, exclude: parsed.exclude,
+  });
 
-      // Step 6b: Suppress DOCS findings if --no-docstring
-      if (options.noDocstring) {
-        for (const r of filtered) {
-          if (r.findings) r.findings = r.findings.filter(f => f.tag !== 'DOCS');
-        }
-      }
+  reportFixResults(results);
+}
 
-      // Step 7: Format and output report
-      const warnings = precheckResult.warnings || [];
-      const report = fmt({ targetDir, results: filtered, warnings, fileCount: files.length });
-      process.stdout.write(report);
+async function resolveConfigsFor(tools, targetDir) {
+  return Promise.all(tools.map(async tool => ({
+    tool,
+    config: await resolveConfig(tool.name, targetDir),
+  })));
+}
 
-      process.exit(getScanExitCode(filtered));
+function reportFixResults(results) {
+  const warnings = results
+    .filter(r => r.fixSkipped)
+    .map(r => `${r.tool}: --fix limited to formatting (using shipped default config)`);
+  const toolSummary = results.map(r => `${r.tool} (${(r.duration / 1000).toFixed(1)}s)`).join(', ');
+  process.stderr.write(`Fixed with: ${toolSummary}\n`);
+  for (const w of warnings) process.stderr.write(`  ${w}\n`);
+
+  const errored = results.filter(r => r.error);
+  if (errored.length > 0) {
+    for (const r of errored) process.stderr.write(`  ${r.tool}: ${r.error}\n`);
+    process.exit(EXIT_PRECHECK_FAILED);
+  }
+  process.exit(EXIT_CLEAN);
+}
+
+async function runScanFlow(precheckResult, targetDir, parsed, prune) {
+  const readyTools = precheckResult.tools;
+  const toolConfigs = await resolveConfigsFor(readyTools, targetDir);
+
+  if (parsed.verbose) process.stderr.write(`Running ${readyTools.map(t => t.name).join(', ')}...\n`);
+  const results = await runTools(toolConfigs, targetDir, {
+    timeout: parsed.timeout, verbose: parsed.verbose, files: prune.files,
+    licenses: parsed.licenses, updateDb: parsed.updateDb, exclude: parsed.exclude,
+  });
+
+  if (parsed.maxLines > 0) {
+    const lineResult = await checkFileLines(prune.files, targetDir, {
+      maxLines: parsed.maxLines, omitPatterns: parsed.maxLinesOmit,
     });
+    results.push(lineResult);
+  }
 
-  // install-hook subcommand
+  const filtered = filterFindings(results, targetDir, prune.ignoreFilter, prune.onlyFilter, {
+    verbose: parsed.verbose,
+  });
+  if (parsed.noDocstring) stripDocsFindings(filtered);
+
+  const warnings = precheckResult.warnings || [];
+  process.stdout.write(parsed.fmt({
+    targetDir, results: filtered, warnings, fileCount: prune.files.length,
+  }));
+  process.exit(getScanExitCode(filtered));
+}
+
+function stripDocsFindings(filtered) {
+  for (const r of filtered) {
+    if (r.findings) r.findings = r.findings.filter(f => f.tag !== 'DOCS');
+  }
+}
+
+async function runSbomFlow(targetDir, options) {
+  const trivyTool = allTools.find(t => t.name === 'trivy');
+  const installed = trivyTool && await trivyTool.checkInstalled();
+  if (!installed) {
+    process.stderr.write(`Error: trivy is required for SBOM generation. ${trivyTool?.installHint || ''}\n`);
+    process.exit(EXIT_PRECHECK_FAILED);
+  }
+  const { stdout, stderr } = await spawnSbom(targetDir, options.updateDb);
+  if (!stdout.trim()) {
+    const advice = needsDbUpdateAdvice(stderr)
+      ? ' Run fast-cv with --update-db --sbom . to refresh the trivy databases before generating the SBOM.'
+      : '';
+    process.stderr.write(`trivy SBOM error: ${stderr.slice(0, 500)}${advice}\n`);
+    process.exit(EXIT_PRECHECK_FAILED);
+  }
+  process.stdout.write(stdout);
+  process.exit(EXIT_CLEAN);
+}
+
+async function spawnSbom(targetDir, updateDb) {
+  const { spawn: spawnProc } = await import('node:child_process');
+  const args = ['fs', '--format', 'cyclonedx', '--quiet'];
+  if (!updateDb) {
+    args.push(
+      '--offline-scan',
+      '--skip-db-update',
+      '--skip-java-db-update',
+      '--skip-check-update',
+      '--skip-vex-repo-update',
+    );
+  }
+  args.push(targetDir);
+  const proc = spawnProc('trivy', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '', stderr = '';
+  proc.stdout.on('data', c => { stdout += c; });
+  proc.stderr.on('data', c => { stderr += c; });
+  await new Promise(r => proc.on('close', r));
+  return { stdout, stderr };
+}
+
+function needsDbUpdateAdvice(stderr) {
+  return /db|database|metadata|cache|download|update/i.test(stderr);
+}
+
+function configureInstallHookCommand(program) {
   program
     .command('install-hook')
     .description('Install git pre-commit hook that runs fast-cv before each commit')
@@ -308,6 +378,4 @@ fi
       chmodSync(hookPath, 0o755);
       process.stdout.write(`fast-cv pre-commit hook installed at ${hookPath}\n`);
     });
-
-  await program.parseAsync(argv);
 }

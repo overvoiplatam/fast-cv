@@ -147,36 +147,33 @@ export async function pruneDirectory(targetDir, { exclude = [], only = [], gitFi
   const onlyFilter = createOnlyFilter(only);
   const gitFileSet = gitFiles ? new Set(gitFiles) : null;
 
-  // Walk directory
   const entries = await readdir(targetDir, { recursive: true, withFileTypes: true });
   const files = [];
   const languages = new Set();
 
   for (const entry of entries) {
-    if (!entry.isFile()) continue;
-
-    // Skip lockfiles (pruning only — not applied to tool findings)
-    if (IGNORED_FILES_SET.has(entry.name)) continue;
-
-    const fullPath = join(entry.parentPath || entry.path, entry.name);
-    const relPath = relative(targetDir, fullPath);
-
-    // Apply ignore rules
-    if (ignoreFilter.ignores(relPath)) continue;
-
-    const ext = extname(entry.name).toLowerCase();
-    if (!SCANNABLE_SET.has(ext)) continue;
-
-    // Apply --only inclusion filter (if set, only keep matching files)
-    if (onlyFilter && !onlyFilter.includes(relPath)) continue;
-
-    // Apply --git-only filter (if set, only keep git-changed files)
-    if (gitFileSet && !gitFileSet.has(relPath)) continue;
-
-    files.push(relPath);
-    languages.add(ext);
+    const accepted = acceptEntry(entry, targetDir, ignoreFilter, onlyFilter, gitFileSet);
+    if (!accepted) continue;
+    files.push(accepted.relPath);
+    languages.add(accepted.ext);
   }
 
   files.sort();
   return { files, languages, ignoreFilter, onlyFilter };
+}
+
+function acceptEntry(entry, targetDir, ignoreFilter, onlyFilter, gitFileSet) {
+  if (!entry.isFile()) return null;
+  if (IGNORED_FILES_SET.has(entry.name)) return null;
+
+  const fullPath = join(entry.parentPath || entry.path, entry.name);
+  const relPath = relative(targetDir, fullPath);
+
+  if (ignoreFilter.ignores(relPath)) return null;
+  const ext = extname(entry.name).toLowerCase();
+  if (!SCANNABLE_SET.has(ext)) return null;
+  if (onlyFilter && !onlyFilter.includes(relPath)) return null;
+  if (gitFileSet && !gitFileSet.has(relPath)) return null;
+
+  return { relPath, ext };
 }

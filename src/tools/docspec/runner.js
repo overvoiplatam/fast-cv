@@ -116,65 +116,110 @@ function stripDotSlashPrefix(s) {
   return s.startsWith('./') ? s.slice(2) : s;
 }
 
+const STAR = 42;
+const QUESTION = 63;
+const SLASH = 47;
+
 function matchGlob(pattern, pi, text, ti) {
   while (pi < pattern.length) {
     const ch = pattern.charCodeAt(pi);
-    if (ch === 42 /* '*' */) {
-      const doubleStar = pi + 1 < pattern.length && pattern.charCodeAt(pi + 1) === 42;
-      const rest = doubleStar ? pi + 2 : pi + 1;
-      // Try matching 0..N text chars; '**' may include '/', '*' may not.
-      for (let consumed = 0; ti + consumed <= text.length; consumed++) {
-        if (!doubleStar && consumed > 0 && text.charCodeAt(ti + consumed - 1) === 47 /* '/' */) break;
-        if (matchGlob(pattern, rest, text, ti + consumed)) return true;
-      }
-      return false;
-    }
+    if (ch === STAR) return matchStar(pattern, pi, text, ti);
     if (ti >= text.length) return false;
-    if (ch === 63 /* '?' */) {
-      if (text.charCodeAt(ti) === 47 /* '/' */) return false;
-      pi++; ti++;
-      continue;
-    }
-    if (text.charCodeAt(ti) !== ch) return false;
+    if (!matchLiteralOrAny(pattern, pi, text, ti, ch)) return false;
     pi++; ti++;
   }
   return ti === text.length;
 }
 
-async function processFile(filename, config, fix) {
-  let source;
-  try { source = readFileSync(filename, 'utf-8'); }
-  catch { return []; }
-
-  const maxBytes = Number.isFinite(config.maxFileBytes) ? config.maxFileBytes : DEFAULT_MAX_FILE_BYTES;
-  if (Buffer.byteLength(source, 'utf-8') > maxBytes) return [];
-
-  const ext = extname(filename).toLowerCase();
-  const isYaml = ext === '.yaml' || ext === '.yml';
-
-  const parsed = isYaml ? tryParseYaml(source) : tryParseJson(source);
-  if (parsed.error) {
-    const lineIndex = buildLineIndex(source);
-    const { line, col } = offsetToLineCol(lineIndex, parsed.error.offset);
-    return [{
-      file: filename,
-      line,
-      col,
-      tag: 'DOCS',
-      rule: 'docspec/parse',
-      severity: 'error',
-      message: `${isYaml ? 'YAML' : 'JSON'} parse error: ${parsed.error.message}`,
-    }];
+// Try matching 0..N text chars against the wildcard, then recurse for the rest.
+// '**' is greedy across '/'; '*' stops at the first '/'.
+function matchStar(pattern, pi, text, ti) {
+  const doubleStar = pi + 1 < pattern.length && pattern.charCodeAt(pi + 1) === STAR;
+  const rest = doubleStar ? pi + 2 : pi + 1;
+  for (let consumed = 0; ti + consumed <= text.length; consumed++) {
+    if (starShouldStop(doubleStar, text, ti, consumed)) break;
+    if (matchGlob(pattern, rest, text, ti + consumed)) return true;
   }
+  return false;
+}
 
-  const override = forcedType(filename, config.forceType);
-  if (override === 'none') return [];
-  const type = override || classify(parsed.data, filename);
+function starShouldStop(doubleStar, text, ti, consumed) {
+  if (doubleStar) return false;
+  if (consumed === 0) return false;
+  return text.charCodeAt(ti + consumed - 1) === SLASH;
+}
+
+function matchLiteralOrAny(pattern, pi, text, ti, ch) {
+  if (ch === QUESTION) return text.charCodeAt(ti) !== SLASH;
+  return text.charCodeAt(ti) === ch;
+}
+
+async function processFile(filename, config, fix) {
+  const source = readFileOrNull(filename);
+  if (source === null) return [];
+  if (exceedsMaxBytes(source, config)) return [];
+
+  const isYaml = isYamlFile(filename);
+  const parsed = parseSourceByExt(source, isYaml);
+  if (parsed.error) return [parseErrorFinding(filename, source, parsed.error, isYaml)];
+
+  const type = decideValidatorType(filename, parsed.data, config);
   if (!type) return [];
-
   const validator = VALIDATORS.get(type);
   if (!validator) return [];
 
+  const ctx = await buildContext(filename, source, isYaml, parsed, config);
+  const findings = validator(ctx);
+
+  if (fix && findings.length > 0) {
+    applyFixes(filename, source, isYaml, parsed.data);
+  }
+  return findings;
+}
+
+function readFileOrNull(filename) {
+  try {
+    return readFileSync(filename, 'utf-8');
+  } catch {
+    return null;
+  }
+}
+
+function exceedsMaxBytes(source, config) {
+  const maxBytes = Number.isFinite(config.maxFileBytes) ? config.maxFileBytes : DEFAULT_MAX_FILE_BYTES;
+  return Buffer.byteLength(source, 'utf-8') > maxBytes;
+}
+
+function isYamlFile(filename) {
+  const ext = extname(filename).toLowerCase();
+  return ext === '.yaml' || ext === '.yml';
+}
+
+function parseSourceByExt(source, isYaml) {
+  return isYaml ? tryParseYaml(source) : tryParseJson(source);
+}
+
+function parseErrorFinding(filename, source, error, isYaml) {
+  const lineIndex = buildLineIndex(source);
+  const { line, col } = offsetToLineCol(lineIndex, error.offset);
+  return {
+    file: filename,
+    line,
+    col,
+    tag: 'DOCS',
+    rule: 'docspec/parse',
+    severity: 'error',
+    message: `${isYaml ? 'YAML' : 'JSON'} parse error: ${error.message}`,
+  };
+}
+
+function decideValidatorType(filename, data, config) {
+  const override = forcedType(filename, config.forceType);
+  if (override === 'none') return null;
+  return override || classify(data, filename);
+}
+
+async function buildContext(filename, source, isYaml, parsed, config) {
   const lineIndex = buildLineIndex(source);
   const ctx = {
     filename,
@@ -190,14 +235,7 @@ async function processFile(filename, config, fix) {
   if (refs.length > 0) {
     ctx.refResults = await resolveRemoteRefs(refs, config);
   }
-
-  const findings = validator(ctx);
-
-  if (fix && findings.length > 0) {
-    applyFixes(filename, source, isYaml, parsed.data);
-  }
-
-  return findings;
+  return ctx;
 }
 
 function resolveDocspecTargets(files, target) {

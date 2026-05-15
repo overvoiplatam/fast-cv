@@ -2,31 +2,46 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { isOpenApiVersion } from './version.js';
 
 export function applyFixes(filename, source, isYaml, data) {
-  const edits = [];
-
-  if (isYaml && data.swagger === 2 && typeof data.info === 'object' && data.info !== null) {
-    const edit = locateSwaggerNumericEdit(source);
-    if (edit) edits.push(edit);
-  }
-
-  if (isYaml && typeof data.openapi === 'string' && isOpenApiVersion(data.openapi) && data.paths && typeof data.paths === 'object' && !Array.isArray(data.paths)) {
-    for (const pathKey of Object.keys(data.paths)) {
-      if (pathKey.startsWith('/') || pathKey.startsWith('x-')) continue;
-      const edit = locateYamlKeyPrependEdit(source, pathKey);
-      if (edit) edits.push(edit);
-    }
-  }
-
+  const edits = [
+    ...collectSwaggerEdits(source, isYaml, data),
+    ...collectOpenapiPathKeyEdits(source, isYaml, data),
+  ];
   if (edits.length === 0) return { changed: false };
 
-  edits.sort((a, b) => b.start - a.start);
-  let out = source;
-  for (const e of edits) {
-    out = out.slice(0, e.start) + e.replacement + out.slice(e.end);
-  }
+  const out = applyEditsToSource(source, edits);
   if (out === source) return { changed: false };
   writeFileSync(filename, out, 'utf-8');
   return { changed: true, count: edits.length };
+}
+
+function collectSwaggerEdits(source, isYaml, data) {
+  if (!isYaml || data.swagger !== 2) return [];
+  if (typeof data.info !== 'object' || data.info === null) return [];
+  const edit = locateSwaggerNumericEdit(source);
+  return edit ? [edit] : [];
+}
+
+function collectOpenapiPathKeyEdits(source, isYaml, data) {
+  if (!isYaml || typeof data.openapi !== 'string') return [];
+  if (!isOpenApiVersion(data.openapi)) return [];
+  if (!data.paths || typeof data.paths !== 'object' || Array.isArray(data.paths)) return [];
+
+  const edits = [];
+  for (const pathKey of Object.keys(data.paths)) {
+    if (pathKey.startsWith('/') || pathKey.startsWith('x-')) continue;
+    const edit = locateYamlKeyPrependEdit(source, pathKey);
+    if (edit) edits.push(edit);
+  }
+  return edits;
+}
+
+function applyEditsToSource(source, edits) {
+  const sorted = edits.slice().sort((a, b) => b.start - a.start);
+  let out = source;
+  for (const e of sorted) {
+    out = out.slice(0, e.start) + e.replacement + out.slice(e.end);
+  }
+  return out;
 }
 
 // Line-by-line scan replaces the original `\s*swagger\s*:\s*…` regex.
@@ -46,26 +61,34 @@ function locateSwaggerNumericEdit(source) {
 }
 
 function swaggerEditFromLine(source, lineStart, lineEnd) {
-  let i = lineStart;
-  while (i < lineEnd && isYamlSpace(source.charCodeAt(i))) i++;
+  let i = skipYamlSpace(source, lineStart, lineEnd);
   if (!source.startsWith('swagger', i)) return null;
-  i += 'swagger'.length;
-  while (i < lineEnd && isYamlSpace(source.charCodeAt(i))) i++;
+  i = skipYamlSpace(source, i + 'swagger'.length, lineEnd);
   if (source.charCodeAt(i) !== 58 /* ':' */) return null;
-  i++;
-  while (i < lineEnd && isYamlSpace(source.charCodeAt(i))) i++;
+  i = skipYamlSpace(source, i + 1, lineEnd);
+
   const numStart = i;
-  // Match `2` optionally followed by `.0`
-  if (source.charCodeAt(i) !== 50 /* '2' */) return null;
-  i++;
-  if (source.startsWith('.0', i)) i += 2;
-  const numEnd = i;
-  // Trailing must be end-of-line or whitespace before optional `# comment`
-  if (i < lineEnd) {
-    while (i < lineEnd && isYamlSpace(source.charCodeAt(i))) i++;
-    if (i < lineEnd && source.charCodeAt(i) !== 35 /* '#' */) return null;
-  }
+  const numEnd = consumeSwaggerVersion(source, i);
+  if (numEnd === -1) return null;
+
+  if (!isYamlEndOfValue(source, numEnd, lineEnd)) return null;
   return { start: numStart, end: numEnd, replacement: '"2.0"' };
+}
+
+function consumeSwaggerVersion(source, i) {
+  if (source.charCodeAt(i) !== 50 /* '2' */) return -1;
+  return source.startsWith('.0', i + 1) ? i + 3 : i + 1;
+}
+
+function isYamlEndOfValue(source, i, lineEnd) {
+  if (i >= lineEnd) return true;
+  const after = skipYamlSpace(source, i, lineEnd);
+  return after >= lineEnd || source.charCodeAt(after) === 35 /* '#' */;
+}
+
+function skipYamlSpace(source, i, lineEnd) {
+  while (i < lineEnd && isYamlSpace(source.charCodeAt(i))) i++;
+  return i;
 }
 
 // Find the first occurrence of `<key>:` at the start of a YAML line

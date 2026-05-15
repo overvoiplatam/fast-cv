@@ -54,30 +54,42 @@ function getPairKeyNode(doc, path) {
 
 export function makeLocate(ctx) {
   return function locate(path) {
-    if (ctx.isYaml && ctx.doc && typeof ctx.doc.getIn === 'function') {
-      const keyNode = getPairKeyNode(ctx.doc, path);
-      if (keyNode && Array.isArray(keyNode.range)) {
-        return offsetToLineCol(ctx.lineIndex, keyNode.range[0]);
-      }
-      const node = ctx.doc.getIn(path, true);
-      if (node && Array.isArray(node.range)) {
-        return offsetToLineCol(ctx.lineIndex, node.range[0]);
-      }
-      if (path.length > 0) {
-        const parent = ctx.doc.getIn(path.slice(0, -1), true);
-        if (parent && Array.isArray(parent.range)) {
-          return offsetToLineCol(ctx.lineIndex, parent.range[0]);
-        }
-      }
-      return { line: 1, col: 1 };
+    if (canUseYamlDoc(ctx)) {
+      return locateInYamlDoc(ctx, path) || { line: 1, col: 1 };
     }
-    if (path.length > 0) {
-      const last = path[path.length - 1];
-      const loc = locateJsonKey(ctx.source, ctx.lineIndex, last);
-      if (loc) return loc;
-    }
-    return { line: 1, col: 1 };
+    return locateInJsonSource(ctx, path);
   };
+}
+
+function canUseYamlDoc(ctx) {
+  return ctx.isYaml && ctx.doc && typeof ctx.doc.getIn === 'function';
+}
+
+function locateInYamlDoc(ctx, path) {
+  const keyNode = getPairKeyNode(ctx.doc, path);
+  if (hasRange(keyNode)) return offsetToLineCol(ctx.lineIndex, keyNode.range.at(0));
+
+  const node = ctx.doc.getIn(path, true);
+  if (hasRange(node)) return offsetToLineCol(ctx.lineIndex, node.range.at(0));
+
+  if (path.length > 0) {
+    const parent = ctx.doc.getIn(path.slice(0, -1), true);
+    if (hasRange(parent)) return offsetToLineCol(ctx.lineIndex, parent.range.at(0));
+  }
+  return null;
+}
+
+function hasRange(node) {
+  return node && Array.isArray(node.range);
+}
+
+function locateInJsonSource(ctx, path) {
+  if (path.length > 0) {
+    const last = path.at(-1);
+    const loc = locateJsonKey(ctx.source, ctx.lineIndex, last);
+    if (loc) return loc;
+  }
+  return { line: 1, col: 1 };
 }
 
 export function finding(ctx, path, rule, severity, message) {

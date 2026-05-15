@@ -92,38 +92,52 @@ export async function resolveRemoteRefs(refs, config) {
     disabled: new Set(),
   };
   const settings = config?.remoteRefs || {};
-  const enabled = settings.enabled !== false;
-  const timeoutMs = Number.isFinite(settings.timeoutMs) ? settings.timeoutMs : 5000;
-  const maxResponseBytes = Number.isFinite(settings.maxResponseBytes) ? settings.maxResponseBytes : 1048576;
-  const maxFetchesPerFile = Number.isFinite(settings.maxFetchesPerFile) ? settings.maxFetchesPerFile : 64;
-  const allowlist = settings.allowlist || null;
+  const limits = buildRefLimits(settings);
   const cacheDir = expandCacheDir(settings.cacheDir);
+  const ctx = { results, settings, limits, cacheDir, remainingBudget: limits.maxFetchesPerFile };
 
-  let budget = maxFetchesPerFile;
-  const uniqueRefs = [...new Set(refs)];
-
-  for (const url of uniqueRefs) {
-    if (!url.startsWith('http://') && !url.startsWith('https://')) continue;
-    if (!enabled) { results.disabled.add(url); continue; }
-    if (!isAllowed(url, allowlist)) { results.blocked.add(url); continue; }
-    if (budget <= 0) { results.unreachable.add(url); continue; }
-
-    const cached = readCached(cacheDir, url);
-    if (cached !== null) {
-      results.resolved.set(url, cached);
-      continue;
-    }
-    budget -= 1;
-    const r = await fetchWithLimits(url, { timeoutMs, maxResponseBytes });
-    if (r.ok) {
-      results.resolved.set(url, r.body);
-      writeCached(cacheDir, url, r.body);
-    } else {
-      results.unreachable.add(url);
-    }
+  for (const url of new Set(refs)) {
+    await resolveOneRef(url, ctx);
   }
-
   return results;
+}
+
+function buildRefLimits(settings) {
+  return {
+    enabled: settings.enabled !== false,
+    timeoutMs: Number.isFinite(settings.timeoutMs) ? settings.timeoutMs : 5000,
+    maxResponseBytes: Number.isFinite(settings.maxResponseBytes) ? settings.maxResponseBytes : 1048576,
+    maxFetchesPerFile: Number.isFinite(settings.maxFetchesPerFile) ? settings.maxFetchesPerFile : 64,
+    allowlist: settings.allowlist || null,
+  };
+}
+
+async function resolveOneRef(url, ctx) {
+  if (!isHttpUrl(url)) return;
+  if (!ctx.limits.enabled) { ctx.results.disabled.add(url); return; }
+  if (!isAllowed(url, ctx.limits.allowlist)) { ctx.results.blocked.add(url); return; }
+  if (ctx.remainingBudget <= 0) { ctx.results.unreachable.add(url); return; }
+
+  const cached = readCached(ctx.cacheDir, url);
+  if (cached !== null) {
+    ctx.results.resolved.set(url, cached);
+    return;
+  }
+  ctx.remainingBudget -= 1;
+  const r = await fetchWithLimits(url, {
+    timeoutMs: ctx.limits.timeoutMs,
+    maxResponseBytes: ctx.limits.maxResponseBytes,
+  });
+  if (r.ok) {
+    ctx.results.resolved.set(url, r.body);
+    writeCached(ctx.cacheDir, url, r.body);
+  } else {
+    ctx.results.unreachable.add(url);
+  }
+}
+
+function isHttpUrl(url) {
+  return url.startsWith('http://') || url.startsWith('https://');
 }
 
 export function collectRemoteRefs(data, depthCap = 64) {
