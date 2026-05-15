@@ -6,12 +6,15 @@ const execFileAsync = promisify(execFile);
 export default {
   name: 'knip',
   extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'],
+  supportsFix: true,
   installHint: 'npm install -g knip',
 
-  buildCommand(targetDir) {
+  buildCommand(targetDir, _configPath, { fix = false } = {}) {
+    const args = ['--reporter', 'json', '--no-progress'];
+    if (fix) args.push('--fix');
     return {
       bin: 'knip',
-      args: ['--reporter', 'json', '--no-progress'],
+      args,
       cwd: targetDir,
     };
   },

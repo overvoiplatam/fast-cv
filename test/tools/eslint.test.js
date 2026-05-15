@@ -32,6 +32,23 @@ describe('eslint adapter', () => {
     assert.ok(args.includes('--fix'));
   });
 
+  it('install hint provisions eslint-plugin-jsonc for JSON support', () => {
+    assert.ok(
+      eslint.installHint.includes('eslint-plugin-jsonc'),
+      'installHint must mention eslint-plugin-jsonc so `.json`/`.jsonc` linting works',
+    );
+  });
+
+  it('passes JSON file paths through to eslint in fix mode', () => {
+    const { args } = eslint.buildCommand('/tmp/project', null, {
+      files: ['package.json', 'tsconfig.jsonc'],
+      fix: true,
+    });
+    assert.ok(args.includes('--fix'));
+    assert.ok(args.includes('package.json'));
+    assert.ok(args.includes('tsconfig.jsonc'));
+  });
+
   it('builds command with files list', () => {
     const { args, cwd } = eslint.buildCommand('/tmp/project', null, { files: ['src/a.js', 'src/b.ts'] });
     assert.equal(cwd, '/tmp/project');

@@ -25,6 +25,17 @@ describe('knip adapter', () => {
     assert.equal(cwd, '/tmp/project');
   });
 
+  it('supports fix and adds --fix when requested', () => {
+    assert.equal(knip.supportsFix, true);
+    const { args } = knip.buildCommand('/tmp/project', null, { fix: true });
+    assert.ok(args.includes('--fix'));
+  });
+
+  it('omits --fix by default', () => {
+    const { args } = knip.buildCommand('/tmp/project');
+    assert.ok(!args.includes('--fix'));
+  });
+
   it('parses unused files', () => {
     const stdout = JSON.stringify({
       files: ['src/old-util.js', 'src/dead-module.ts'],

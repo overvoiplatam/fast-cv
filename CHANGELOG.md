@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docspec.json`, `.spectral.yaml`, `.markdownlint.json`, `.vale.ini` ship under `defaults/` and copy into `~/.config/fast-cv/defaults/` during `--mode all` or `--mode configs`.
 - `docspec` supports `--fix` with a safe whitelist: prepends `/` to OpenAPI path keys missing it; quotes numeric `swagger: 2.0` as `"2.0"`.
 
+### Added — JSON file `--fix` support
+
+- `knip` now supports `--fix`. When invoked in fix mode, knip prunes unused exports, files, and dependencies from `package.json` in place. **Destructive**: review the diff before committing — knip removes code based on its dead-code heuristic and can mis-identify dynamically-referenced exports.
+- `eslint-plugin-jsonc` is now installed by `install.sh --mode all` and pre-wired in `defaults/eslint.config.mjs`, so `eslint` lints `.json` and `.jsonc` files (including `package.json`, `tsconfig.json`). For `--fix` on JSON, a **local** `eslint.config.{js,mjs,cjs}` is still required — the shipped defaults are gated by the package-default fix policy. See [docs/configuration.md](docs/configuration.md) → "JSON files specifically" for details.
+
 ### Breaking
 
 - **`--timeout` is now optional and disabled by default.** Previously, `fast-cv` imposed a 120-second guardrail on every tool. The guardrail is now off unless you pass `--timeout <seconds>` explicitly. Tools without their own internal timeout can, in theory, hang indefinitely.

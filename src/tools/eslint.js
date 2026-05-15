@@ -71,7 +71,7 @@ export default {
   name: 'eslint',
   extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts', '.svelte', '.vue', '.json', '.jsonc'],
   supportsFix: true,
-  installHint: 'npm install -g eslint eslint-plugin-security eslint-plugin-sonarjs',
+  installHint: 'npm install -g eslint eslint-plugin-security eslint-plugin-sonarjs eslint-plugin-jsonc',
 
   buildCommand(targetDir, configPath, { files = [], fix = false } = {}) {
     const args = ['--format', 'json'];

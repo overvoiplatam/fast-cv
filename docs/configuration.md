@@ -185,6 +185,17 @@ All patterns use gitignore syntax via the `ignore` npm package.
 
 When semantic fix is skipped, a warning appears in the report. To get full `--fix` behavior, provide a local config file for the tool.
 
+#### JSON files specifically
+
+Three adapters touch JSON: `eslint` (lint/format `.json`/`.jsonc`), `knip` (removes unused dependencies from `package.json`), and `docspec`/`spectral` (OpenAPI/AsyncAPI/JSON-Schema specs only).
+
+- **`knip --fix`** runs out of the box once `knip` is installed (no shipped default config, so the gate above does not apply). **This is destructive**: knip removes unused exports, unused files, and unused dependencies from `package.json` in place. Always review the diff before committing — knip's dead-code heuristic can mis-identify exports that are referenced dynamically (string-keyed lookups, build-time codegen, framework conventions). Treat `knip --fix` like `git clean -f`: useful, but not something to chain in front of an automated commit.
+- **`eslint --fix` on `.json`** requires two things: (1) `eslint-plugin-jsonc` installed (it is in the install hint), and (2) a **local** `eslint.config.{js,mjs,cjs}` in your project — the shipped `defaults/eslint.config.mjs` falls under `package-default` and the gate above strips `--fix` for safety. The simplest local config is to copy `defaults/eslint.config.mjs` into your project root and adjust as needed.
+- **`docspec --fix`** is spec-aware and applies a safe whitelist (e.g. prepending `/` to OpenAPI path keys, quoting numeric `swagger: 2.0`) — it will not reformat arbitrary JSON like `package.json` or `tsconfig.json`.
+- **`spectral --fix`** does not modify files directly (spectral has no native `--fix`). Instead, when `redocly` is installed, the adapter runs `redocly bundle` as a pre-fix command, which normalizes/inlines OpenAPI specs (resolving `$ref`, rewriting to a canonical YAML/JSON layout). This is OpenAPI-specific normalization, not a general JSON formatter.
+
+There is no general-purpose JSON pretty-printer in fast-cv by design — `--fix` only modifies files in response to findings the pipeline already reports.
+
 ### Tool Errors and Exit Codes
 
 Tool runtime failures are reported separately from code findings. Missing tools remain warnings when at least one applicable tool can run, but a selected tool that errors, times out, or produces unparseable output makes validation incomplete and exits `2`. Trivy database cache failures include guidance to run `fast-cv --update-db .` or rerun `install.sh --mode all`.

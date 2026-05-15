@@ -12,7 +12,7 @@ export default {
   extensions: string[],    // file extensions this tool handles (e.g. ['.py', '.pyi'])
   installHint: string,     // shell command to install the tool
   optIn: boolean,          // if true, only runs when explicitly listed in --tools
-  supportsFix: boolean,    // if true, --fix mode includes this tool (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff)
+  supportsFix: boolean,    // if true, --fix mode includes this tool (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff, knip, docspec, spectral, markdownlint)
 
   async checkInstalled(): boolean,
   buildCommand(targetDir, configPath, options?): { bin, args, cwd? },
@@ -28,7 +28,7 @@ export default {
 | Option | Type | Used By |
 |--------|------|---------|
 | `files` | `string[]` | ruff, eslint, semgrep, bearer, golangci-lint, mypy, typos, vulture, stylelint, sqlfluff |
-| `fix` | `boolean` | ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff |
+| `fix` | `boolean` | ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff, knip, docspec, spectral, markdownlint |
 | `licenses` | `boolean` | trivy |
 | `updateDb` | `boolean` | trivy |
 
@@ -48,7 +48,7 @@ export default {
 | 8 | mypy | `src/tools/mypy.js` | `.py .pyi` | TYPE_ERROR | no | no | mypy.ini |
 | 9 | typos | `src/tools/typos.js` | `.py .pyi .js .jsx .ts .tsx .go .java .rb .php .rs .c .cpp .h .cs .swift .kt .kts .sql .mts .cts .scala .sh .bash` | TYPO | **yes** | no | typos.toml |
 | 10 | vulture | `src/tools/vulture.js` | `.py .pyi` | DEAD_CODE | no | no | — |
-| 11 | knip | `src/tools/knip.js` | `.js .jsx .ts .tsx .mjs .cjs` | DEAD_CODE | no | no | — |
+| 11 | knip | `src/tools/knip.js` | `.js .jsx .ts .tsx .mjs .cjs` | DEAD_CODE | no | yes | — |
 | 12 | tsc | `src/tools/tsc.js` | `.ts .tsx .mts .cts` | TYPE_ERROR | no | no | tsconfig.json |
 | 13 | clippy | `src/tools/clippy.js` | `.rs` | LINTER BUG REFACTOR DOCS | no | yes | clippy.toml |
 | 14 | stylelint | `src/tools/stylelint.js` | `.css .scss .sass .less` | LINTER FORMAT | no | yes | .stylelintrc.json |
