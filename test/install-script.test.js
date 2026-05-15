@@ -11,29 +11,40 @@ describe('install.sh tool provisioning', () => {
   it('attempts to provision every supported tool in --mode all', async () => {
     const script = await installScript();
     for (const expected of [
-      'install_python_tool ruff',
-      'install_python_tool semgrep',
-      'install_npm_global eslint',
-      'install_npm_global jscpd',
-      'install_npm_global knip',
-      'install_npm_global typescript',
-      'command -v bearer',
-      'command -v golangci-lint',
-      'command -v trivy',
+      'install_python_if_missing ruff',
+      'install_python_if_missing semgrep',
+      'install_node_if_missing eslint',
+      'install_node_if_missing jscpd',
+      'install_node_if_missing knip',
+      'install_node_if_missing tsc typescript',
+      'install_binary_if_missing bearer',
+      'install_binary_if_missing golangci-lint',
+      'install_binary_if_missing trivy',
       'trivy fs --download-db-only',
       'trivy fs --download-java-db-only',
-      'install_python_tool mypy',
-      'install_python_tool vulture',
-      'install_npm_global stylelint',
-      'install_python_tool sqlfluff',
+      'install_python_if_missing mypy',
+      'install_python_if_missing vulture',
+      'install_node_if_missing stylelint',
+      'install_python_if_missing sqlfluff',
       'cargo install typos-cli',
       'rustup component add clippy',
-      'install_npm_global "@stoplight/spectral-cli"',
-      'install_npm_global "@redocly/cli"',
-      'install_npm_global markdownlint-cli2',
+      'install_node_if_missing spectral "@stoplight/spectral-cli"',
+      'install_node_if_missing redocly "@redocly/cli"',
+      'install_node_if_missing markdownlint-cli2',
       'go install github.com/errata-ai/vale/v3@latest',
     ]) {
       assert.ok(script.includes(expected), `install.sh should include: ${expected}`);
+    }
+  });
+
+  it('defines the three install_*_if_missing helpers', async () => {
+    const script = await installScript();
+    for (const helper of [
+      'install_node_if_missing()',
+      'install_binary_if_missing()',
+      'install_python_if_missing()',
+    ]) {
+      assert.ok(script.includes(helper), `install.sh should define helper: ${helper}`);
     }
   });
 });

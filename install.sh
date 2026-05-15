@@ -11,6 +11,10 @@ INSTALL_DIR="${HOME}/.local/share/fast-cv"
 CONFIG_DIR="${HOME}/.config/fast-cv/defaults"
 LOCAL_BIN="${HOME}/.local/bin"
 
+# Preserve the user's original PATH so the end-of-install hint reflects their shell config,
+# not the in-script mutations below.
+ORIG_PATH="${PATH}"
+
 # Ensure binaries we just installed are discoverable for the rest of this script.
 # Without this, `command -v vale` fails after `go install GOBIN=${LOCAL_BIN}` on
 # machines where ~/.local/bin isn't already in PATH, and downstream steps silently skip.
@@ -20,7 +24,9 @@ case ":${PATH}:" in
   *) export PATH="${LOCAL_BIN}:${PATH}" ;;
 esac
 # Also add common Go/Homebrew bin dirs so `command -v vale` finds them when newly installed.
-for extra in "${HOME}/go/bin" "/opt/homebrew/bin" "/usr/local/bin"; do
+# ${HOME}/Library/Python/*/bin covers macOS pip3 --user installs (ruff, semgrep, mypy, vulture, sqlfluff)
+# — the glob is filtered by the `-d` check, so the unexpanded literal is harmless on Linux.
+for extra in "${HOME}/go/bin" "/opt/homebrew/bin" "/usr/local/bin" "${HOME}"/Library/Python/*/bin; do
   if [[ -d "${extra}" ]]; then
     case ":${PATH}:" in
       *":${extra}:"*) ;;
@@ -48,12 +54,11 @@ fail()  { echo -e "${RED}[FAIL]${NC} $*"; exit 1; }
 
 # ─── Helper: install a global npm package (user → sudo fallback) ───
 install_npm_global() {
-  local pkg="$*"
-  if npm install -g ${pkg} 2>/dev/null; then
+  if npm install -g "$@" 2>/dev/null; then
     return 0
   fi
   warn "npm install -g failed (permissions?) — retrying with sudo..."
-  if sudo npm install -g ${pkg} 2>/dev/null; then
+  if sudo npm install -g "$@" 2>/dev/null; then
     return 0
   fi
   return 1
@@ -79,6 +84,50 @@ install_python_tool() {
   info "Retrying ${tool} with --break-system-packages..."
   pip3 install --user --break-system-packages "${tool}" 2>/dev/null && return 0
   return 1
+}
+
+# ─── Helper: install a Node CLI globally if missing ───
+install_node_if_missing() {
+  local bin="$1" pkg="${2:-$1}"
+  if command -v "${bin}" &>/dev/null; then
+    ok "${bin} already installed: $("${bin}" --version 2>/dev/null || echo 'version unknown')"
+    return 0
+  fi
+  info "Installing ${bin}..."
+  if install_npm_global "${pkg}"; then
+    ok "${bin} installed"
+  else
+    warn "Failed to install ${bin}"
+  fi
+}
+
+# ─── Helper: install a binary via a curl-piped installer if missing ───
+install_binary_if_missing() {
+  local bin="$1" url="$2"
+  if command -v "${bin}" &>/dev/null; then
+    ok "${bin} already installed: $("${bin}" --version 2>/dev/null | head -1)"
+    return 0
+  fi
+  info "Installing ${bin}..."
+  if curl -sfL "${url}" | sh -s -- -b "${LOCAL_BIN}" 2>/dev/null; then
+    ok "${bin} installed to ${LOCAL_BIN}"
+  else
+    warn "Failed to install ${bin} — you can install it manually later"
+  fi
+}
+
+# ─── Helper: install a Python CLI via install_python_tool if missing ───
+install_python_if_missing() {
+  local bin="$1" pkg="${2:-$1}"
+  if command -v "${bin}" &>/dev/null; then
+    ok "${bin} already installed: $("${bin}" --version 2>/dev/null || echo 'version unknown')"
+    return 0
+  fi
+  if install_python_tool "${pkg}"; then
+    ok "${bin} installed"
+  else
+    warn "Failed to install ${bin}"
+  fi
 }
 
 # ─── Parse arguments ────────────────────────────────────────────────
@@ -220,150 +269,74 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
   mkdir -p "${LOCAL_BIN}"
   info "Installing tool dependencies..."
 
-  # ruff (Python)
-  if command -v ruff &>/dev/null; then
-    ok "ruff already installed: $(ruff --version)"
-  else
-    install_python_tool ruff && ok "ruff installed" || warn "Failed to install ruff"
-  fi
+  # ruff, semgrep (Python)
+  install_python_if_missing ruff
+  install_python_if_missing semgrep
 
-  # semgrep (Python)
-  if command -v semgrep &>/dev/null; then
-    ok "semgrep already installed: $(semgrep --version 2>/dev/null || echo 'version unknown')"
-  else
-    install_python_tool semgrep && ok "semgrep installed" || warn "Failed to install semgrep"
-  fi
-
-  # eslint + plugins (Node — global install with sudo fallback)
-  if command -v eslint &>/dev/null; then
-    ok "eslint already installed: $(eslint --version)"
-  else
-    info "Installing eslint..."
-    install_npm_global eslint \
-      && ok "eslint installed" \
-      || warn "Failed to install eslint"
-  fi
+  # eslint (Node — global install with sudo fallback)
+  install_node_if_missing eslint
 
   # eslint plugins — install into fast-cv's own node_modules/ so the shipped config can find them
   # (global npm packages are NOT in Node's resolution chain for the config file)
-  ESLINT_PLUGINS="eslint-plugin-sonarjs eslint-plugin-security typescript-eslint eslint-plugin-react eslint-plugin-react-hooks eslint-plugin-vue eslint-plugin-svelte eslint-plugin-jsonc eslint-plugin-jsdoc"
+  ESLINT_PLUGINS=(
+    eslint-plugin-sonarjs
+    eslint-plugin-security
+    typescript-eslint
+    eslint-plugin-react
+    eslint-plugin-react-hooks
+    eslint-plugin-vue
+    eslint-plugin-svelte
+    eslint-plugin-jsonc
+    eslint-plugin-jsdoc
+  )
   info "Installing eslint plugins into fast-cv node_modules..."
-  (cd "${SCRIPT_DIR}" && npm install --no-save ${ESLINT_PLUGINS} 2>/dev/null) \
-    && ok "eslint plugins installed" \
-    || warn "Failed to install some eslint plugins (eslint will degrade gracefully)"
-
-  # jscpd (Node — code duplication detector)
-  if command -v jscpd &>/dev/null; then
-    ok "jscpd already installed: $(jscpd --version 2>/dev/null || echo 'version unknown')"
+  if (cd "${SCRIPT_DIR}" && npm install --no-save "${ESLINT_PLUGINS[@]}" 2>/dev/null); then
+    ok "eslint plugins installed"
   else
-    info "Installing jscpd..."
-    install_npm_global jscpd \
-      && ok "jscpd installed" \
-      || warn "Failed to install jscpd"
+    warn "Failed to install some eslint plugins (eslint will degrade gracefully)"
   fi
 
-  # knip (Node — JS/TS unused code detector)
-  if command -v knip &>/dev/null; then
-    ok "knip already installed: $(knip --version 2>/dev/null || echo 'version unknown')"
-  else
-    info "Installing knip..."
-    install_npm_global knip \
-      && ok "knip installed" \
-      || warn "Failed to install knip"
-  fi
+  # jscpd, knip, tsc (Node)
+  install_node_if_missing jscpd
+  install_node_if_missing knip
+  install_node_if_missing tsc typescript
 
-  # TypeScript compiler (Node — TS type checking)
-  if command -v tsc &>/dev/null; then
-    ok "tsc already installed: $(tsc --version 2>/dev/null || echo 'version unknown')"
-  else
-    info "Installing TypeScript compiler..."
-    install_npm_global typescript \
-      && ok "typescript installed" \
-      || warn "Failed to install TypeScript compiler"
-  fi
-
-  # bearer (binary)
-  if command -v bearer &>/dev/null; then
-    ok "bearer already installed"
-  else
-    info "Installing bearer..."
-    if curl -sfL https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.sh | sh -s -- -b "${LOCAL_BIN}" 2>/dev/null; then
-      ok "bearer installed to ${LOCAL_BIN}"
-    else
-      warn "Failed to install bearer — you can install it manually later"
-    fi
-  fi
-
-  # golangci-lint (binary)
-  if command -v golangci-lint &>/dev/null; then
-    ok "golangci-lint already installed: $(golangci-lint --version 2>/dev/null | head -1)"
-  else
-    info "Installing golangci-lint..."
-    if curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "${LOCAL_BIN}" 2>/dev/null; then
-      ok "golangci-lint installed to ${LOCAL_BIN}"
-    else
-      warn "Failed to install golangci-lint — you can install it manually later"
-    fi
-  fi
-
-  # trivy (binary)
-  if command -v trivy &>/dev/null; then
-    ok "trivy already installed: $(trivy --version 2>/dev/null | head -1)"
-  else
-    info "Installing trivy..."
-    if curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "${LOCAL_BIN}" 2>/dev/null; then
-      ok "trivy installed to ${LOCAL_BIN}"
-    else
-      warn "Failed to install trivy — you can install it manually later"
-    fi
-  fi
+  # bearer, golangci-lint, trivy (binary installers)
+  install_binary_if_missing bearer "https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.sh"
+  install_binary_if_missing golangci-lint "https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh"
+  install_binary_if_missing trivy "https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh"
   if command -v trivy &>/dev/null; then
     info "Updating trivy vulnerability database for cached scans..."
-    trivy fs --download-db-only --quiet --no-progress "${SCRIPT_DIR}" 2>/dev/null \
-      && ok "trivy vulnerability database ready" \
-      || warn "Failed to download trivy vulnerability database — trivy scans may fail until the DB is cached"
+    if trivy fs --download-db-only --quiet --no-progress "${SCRIPT_DIR}" 2>/dev/null; then
+      ok "trivy vulnerability database ready"
+    else
+      warn "Failed to download trivy vulnerability database — trivy scans may fail until the DB is cached"
+    fi
 
     info "Updating trivy Java database for cached scans..."
-    trivy fs --download-java-db-only --quiet --no-progress "${SCRIPT_DIR}" 2>/dev/null \
-      && ok "trivy Java database ready" \
-      || warn "Failed to download trivy Java database — Java dependency scanning may be reduced until the DB is cached"
+    if trivy fs --download-java-db-only --quiet --no-progress "${SCRIPT_DIR}" 2>/dev/null; then
+      ok "trivy Java database ready"
+    else
+      warn "Failed to download trivy Java database — Java dependency scanning may be reduced until the DB is cached"
+    fi
   fi
 
-  # mypy (Python)
-  if command -v mypy &>/dev/null; then
-    ok "mypy already installed: $(mypy --version)"
-  else
-    install_python_tool mypy && ok "mypy installed" || warn "Failed to install mypy"
-  fi
-
-  # vulture (Python dead code detector)
-  if command -v vulture &>/dev/null; then
-    ok "vulture already installed: $(vulture --version 2>/dev/null || echo 'version unknown')"
-  else
-    install_python_tool vulture && ok "vulture installed" || warn "Failed to install vulture"
-  fi
+  # mypy, vulture (Python)
+  install_python_if_missing mypy
+  install_python_if_missing vulture
 
   # stylelint (Node — CSS linter)
-  if command -v stylelint &>/dev/null; then
-    ok "stylelint already installed: $(stylelint --version 2>/dev/null || echo 'version unknown')"
-  else
-    info "Installing stylelint..."
-    install_npm_global stylelint \
-      && ok "stylelint installed" \
-      || warn "Failed to install stylelint"
-  fi
+  install_node_if_missing stylelint
   # stylelint-config-standard — install into fast-cv's node_modules/ for config resolution
   info "Installing stylelint-config-standard into fast-cv node_modules..."
-  (cd "${SCRIPT_DIR}" && npm install --no-save stylelint-config-standard 2>/dev/null) \
-    && ok "stylelint-config-standard installed" \
-    || warn "Failed to install stylelint-config-standard"
+  if (cd "${SCRIPT_DIR}" && npm install --no-save stylelint-config-standard 2>/dev/null); then
+    ok "stylelint-config-standard installed"
+  else
+    warn "Failed to install stylelint-config-standard"
+  fi
 
   # sqlfluff (Python — SQL linter)
-  if command -v sqlfluff &>/dev/null; then
-    ok "sqlfluff already installed: $(sqlfluff version 2>/dev/null || echo 'version unknown')"
-  else
-    install_python_tool sqlfluff && ok "sqlfluff installed" || warn "Failed to install sqlfluff"
-  fi
+  install_python_if_missing sqlfluff
 
   # typos (Rust binary — try cargo, then pre-built binary)
   if command -v typos &>/dev/null; then
@@ -411,41 +384,19 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
     warn "clippy not installed — install Rust/rustup, then run: rustup component add clippy"
   fi
 
-  # spectral (Node — OpenAPI/AsyncAPI/JSON Schema linter)
-  if command -v spectral &>/dev/null; then
-    ok "spectral already installed: $(spectral --version 2>/dev/null || echo 'version unknown')"
-  else
-    info "Installing spectral..."
-    install_npm_global "@stoplight/spectral-cli" \
-      && ok "spectral installed" \
-      || warn "Failed to install spectral"
-  fi
-
-  # redocly (Node — OpenAPI bundler, backs docspec/spectral fix mode)
-  if command -v redocly &>/dev/null; then
-    ok "redocly already installed: $(redocly --version 2>/dev/null || echo 'version unknown')"
-  else
-    info "Installing redocly..."
-    install_npm_global "@redocly/cli" \
-      && ok "redocly installed" \
-      || warn "Failed to install redocly"
-  fi
-
-  # markdownlint-cli2 (Node — Markdown linter)
-  if command -v markdownlint-cli2 &>/dev/null; then
-    ok "markdownlint-cli2 already installed: $(markdownlint-cli2 --version 2>/dev/null || echo 'version unknown')"
-  else
-    info "Installing markdownlint-cli2..."
-    install_npm_global markdownlint-cli2 \
-      && ok "markdownlint-cli2 installed" \
-      || warn "Failed to install markdownlint-cli2"
-  fi
+  # spectral, redocly, markdownlint-cli2 (Node)
+  install_node_if_missing spectral "@stoplight/spectral-cli"
+  install_node_if_missing redocly "@redocly/cli"
+  install_node_if_missing markdownlint-cli2
 
   # vale (Go binary — prose style linter)
   if command -v vale &>/dev/null; then
     ok "vale already installed: $(vale --version 2>/dev/null | head -1)"
   else
     info "Installing vale..."
+    if [[ "${OS}" == "Darwin" ]] && ! command -v brew &>/dev/null; then
+      info "Homebrew not found; falling back to go/pre-built. Install Homebrew from https://brew.sh for the fastest vale install on macOS."
+    fi
     VALE_INSTALLED=false
     if command -v brew &>/dev/null; then
       brew install vale 2>/dev/null && VALE_INSTALLED=true
@@ -591,12 +542,21 @@ else
   warn "fast-cv command not found in PATH. You may need to restart your shell."
 fi
 
-# PATH warning
-if [[ ":${PATH}:" != *":${LOCAL_BIN}:"* ]]; then
+# PATH warning — check the user's ORIGINAL shell PATH, not the in-script mutations.
+if [[ ":${ORIG_PATH}:" != *":${LOCAL_BIN}:"* ]]; then
   echo ""
-  warn "${LOCAL_BIN} is not in your PATH."
-  echo "  Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-  echo "    export PATH=\"\${HOME}/.local/bin:\${PATH}\""
+  warn "${LOCAL_BIN} is not in your shell's PATH."
+  if [[ "${OS}" == "Darwin" ]]; then
+    echo "  Add this to ~/.zshrc (macOS default shell since Catalina):"
+    echo "    export PATH=\"\${HOME}/.local/bin:\${PATH}\""
+    echo "  If ruff/semgrep/mypy/vulture/sqlfluff are missing after install, also add the"
+    echo "  pip3 --user bin directory (replace 3.x with your Python version, e.g. 3.11):"
+    echo "    export PATH=\"\${HOME}/Library/Python/3.x/bin:\${PATH}\""
+    echo "  Then reload: source ~/.zshrc"
+  else
+    echo "  Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
+    echo "    export PATH=\"\${HOME}/.local/bin:\${PATH}\""
+  fi
 fi
 
 echo ""

@@ -110,6 +110,29 @@ When a previous installation is detected, the installer prompts you to choose:
 
 `install.sh --mode all` attempts to install every supported tool so the same CI image or developer machine can validate many project types. Tools that cannot be installed are reported as warnings; coverage is reduced until they are installed.
 
+### macOS
+
+`install.sh` detects `Darwin` and works on both Apple Silicon and Intel Macs. A few platform-specific notes:
+
+- **Prerequisites**: Node ≥ 20 (`brew install node`), Python 3.10+ with `pipx` or `pip3` (`brew install python pipx`), and optionally Homebrew itself (recommended — gives the fastest install path for `vale`).
+- **PATH setup**: after install, ensure `~/.local/bin` (where the `fast-cv` symlink and most tool binaries land) is in your PATH:
+
+  ```bash
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+  source ~/.zshrc
+  ```
+
+- **pip3 --user binaries**: on macOS, `pip3 install --user` places binaries under `~/Library/Python/<ver>/bin`, not `~/.local/bin`. If `ruff`, `semgrep`, `mypy`, `vulture`, or `sqlfluff` are missing after install, add that directory to PATH as well (replace `3.x` with your Python version, e.g. `3.11`):
+
+  ```bash
+  echo 'export PATH="$HOME/Library/Python/3.x/bin:$PATH"' >> ~/.zshrc
+  ```
+
+  Using `pipx` (`brew install pipx && pipx ensurepath`) avoids this entirely by installing under `~/.local/bin`.
+
+- **Apple Silicon**: the installer auto-prepends `/opt/homebrew/bin` to PATH during install, so Homebrew-installed tools (`brew install vale`, etc.) are discoverable in the same session.
+- **One-liner**: `bash install.sh` does the full install. Use `--mode app` if you only want the Node app + symlink and prefer to install the 19 external tools manually.
+
 ## Usage
 
 ```bash

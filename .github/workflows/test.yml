@@ -1,0 +1,125 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full_install:
+        description: "Run install.sh --mode all (slow; installs all 19 external tools)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [20, 22]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Audit production deps at >=high. Per dep-policy in CLAUDE.md: this is our
+      # only continuous signal for "is it time to bump?". Failure here is the trigger.
+      - run: npm audit --omit=dev --audit-level=high
+
+  shellcheck:
+    name: shellcheck install.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck install.sh
+
+  lint-self:
+    name: eslint self-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install eslint and plugins
+        run: |
+          npm install -g eslint
+          npm install --no-save \
+            eslint-plugin-sonarjs \
+            eslint-plugin-security \
+            typescript-eslint \
+            eslint-plugin-react \
+            eslint-plugin-react-hooks \
+            eslint-plugin-vue \
+            eslint-plugin-svelte \
+            eslint-plugin-jsonc \
+            eslint-plugin-jsdoc
+      - run: node bin/fast-cv.js --tools=eslint .
+
+  install-script:
+    name: install.sh --mode app (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # --mode app exercises the npm install + symlink path on both OSes.
+      # We deliberately skip --mode all here: installing all 19 external tools
+      # (pipx, cargo, curl-piped binaries, brew, ...) on every PR is slow and flaky.
+      # Run the full install via the workflow_dispatch input below when you need it.
+      - run: bash install.sh --mode app
+      - name: Verify symlink and version
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          which fast-cv
+          fast-cv --version
+
+  install-script-full:
+    name: install.sh --mode all (${{ matrix.os }})
+    if: github.event_name == 'workflow_dispatch' && inputs.full_install
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: bash install.sh --mode all
+      - name: Verify fast-cv runs
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          fast-cv --version

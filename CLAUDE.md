@@ -70,6 +70,16 @@ Every change must satisfy:
 - Use Jest, Mocha, or other test frameworks
 - Create `.d.ts` files or TypeScript source
 - Add runtime transpilation
+- Bump npm runtime deps just to stay on latest — see Dependency Policy below
+
+## Dependency Policy
+
+Runtime npm deps (`commander`, `ignore`, `yaml`) are bumped **only** when:
+
+1. `npm audit` reports a vulnerability at the configured severity, or
+2. A feature/fix requires an API only available in the newer version.
+
+Being "behind latest" is not a reason to bump. CI runs `npm audit --audit-level=high` on every PR (`.github/workflows/test.yml`), which is the continuous signal — if it turns red, treat that as the trigger to upgrade as a focused, scoped change. Do not bundle "stay current" bumps into unrelated PRs.
 
 ## Deep Context
 
