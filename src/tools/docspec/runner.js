@@ -102,19 +102,43 @@ function forcedType(filename, forceType) {
   return null;
 }
 
+// Glob matcher implemented by walking pattern and filename in lockstep —
+// no `new RegExp(...)`, no dynamic regex construction. Supports the same
+// wildcards as the previous regex form: `**` (any chars incl. /), `*`
+// (any chars except /), `?` (one char). All other pattern chars match
+// literally.
 function simpleGlobMatch(pattern, filename) {
-  // Glob-to-regex: all regex metacharacters in `pattern` are escaped
-  // (first .replace), then glob wildcards (`*`, `**`, `?`) are substituted
-  // with their bounded regex equivalents. `pattern` comes from the
-  // shipped/local docspec.json allowlist — a trusted config source.
-  // eslint-disable-next-line security/detect-non-literal-regexp
-  const re = new RegExp('^' + pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*\*/g, '__DOUBLESTAR__')
-    .replace(/\*/g, '[^/]*')
-    .replace(/__DOUBLESTAR__/g, '.*')
-    .replace(/\?/g, '.') + '$');
-  return re.test(filename) || re.test(filename.replace(/^\.\//, ''));
+  return matchGlob(pattern, 0, filename, 0)
+    || matchGlob(pattern, 0, stripDotSlashPrefix(filename), 0);
+}
+
+function stripDotSlashPrefix(s) {
+  return s.startsWith('./') ? s.slice(2) : s;
+}
+
+function matchGlob(pattern, pi, text, ti) {
+  while (pi < pattern.length) {
+    const ch = pattern.charCodeAt(pi);
+    if (ch === 42 /* '*' */) {
+      const doubleStar = pi + 1 < pattern.length && pattern.charCodeAt(pi + 1) === 42;
+      const rest = doubleStar ? pi + 2 : pi + 1;
+      // Try matching 0..N text chars; '**' may include '/', '*' may not.
+      for (let consumed = 0; ti + consumed <= text.length; consumed++) {
+        if (!doubleStar && consumed > 0 && text.charCodeAt(ti + consumed - 1) === 47 /* '/' */) break;
+        if (matchGlob(pattern, rest, text, ti + consumed)) return true;
+      }
+      return false;
+    }
+    if (ti >= text.length) return false;
+    if (ch === 63 /* '?' */) {
+      if (text.charCodeAt(ti) === 47 /* '/' */) return false;
+      pi++; ti++;
+      continue;
+    }
+    if (text.charCodeAt(ti) !== ch) return false;
+    pi++; ti++;
+  }
+  return ti === text.length;
 }
 
 async function processFile(filename, config, fix) {

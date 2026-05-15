@@ -19,6 +19,8 @@ const DOCS_LINTERS = new Set([
   'revive',
 ]);
 
+const TOOL_NAME = 'golangci-lint';
+
 function classifyLinter(linterName) {
   if (!linterName) return 'LINTER';
   if (REFACTOR_LINTERS.has(linterName)) return 'REFACTOR';
@@ -29,10 +31,10 @@ function classifyLinter(linterName) {
 }
 
 export default {
-  name: 'golangci-lint',
+  name: TOOL_NAME,
   extensions: ['.go'],
   supportsFix: true,
-  installHint: 'curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ~/.local/bin',
+  installHint: `curl -sSfL https://raw.githubusercontent.com/golangci/${TOOL_NAME}/master/install.sh | sh -s -- -b ~/.local/bin`,
 
   buildCommand(targetDir, configPath, { files = [], fix = false } = {}) {
     const args = ['run', '--out-format', 'json'];
@@ -47,14 +49,14 @@ export default {
     } else {
       args.push('./...');
     }
-    return { bin: 'golangci-lint', args, cwd: targetDir };
+    return { bin: TOOL_NAME, args, cwd: targetDir };
   },
 
   parseOutput(stdout, stderr, exitCode) {
     // golangci-lint exits: 0 = clean, 1 = findings, >1 = error
     if (!stdout.trim()) {
       if (exitCode > 1) {
-        throw new Error(`golangci-lint error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
+        throw new Error(`${TOOL_NAME} error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
       }
       return [];
     }
@@ -63,7 +65,7 @@ export default {
     try {
       data = JSON.parse(stdout);
     } catch {
-      throw new Error(`golangci-lint: failed to parse JSON output: ${stdout.slice(0, 200)}`);
+      throw new Error(`${TOOL_NAME}: failed to parse JSON output: ${stdout.slice(0, 200)}`);
     }
 
     const issues = data.Issues || [];
@@ -80,7 +82,7 @@ export default {
 
   async checkInstalled() {
     try {
-      await execFileAsync('golangci-lint', ['--version']);
+      await execFileAsync(TOOL_NAME, ['--version']);
       return true;
     } catch {
       return false;

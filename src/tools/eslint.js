@@ -52,6 +52,44 @@ const SONARJS_REFACTOR_RULES = new Set([
   'sonarjs/prefer-while',
 ]);
 
+function parseEslintJson(stdout) {
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    throw new Error(`eslint: failed to parse JSON output: ${stdout.slice(0, 200)}`);
+  }
+}
+
+function collectEslintFindings(fileResult) {
+  if (!fileResult.messages || fileResult.messages.length === 0) return [];
+  const out = [];
+  for (const msg of fileResult.messages) {
+    if (isUnmatchedConfigMessage(msg)) continue;
+    out.push(makeEslintFinding(fileResult.filePath, msg));
+  }
+  return out;
+}
+
+// ESLint v9 flat config emits this for files with no matching config —
+// not a real finding.
+function isUnmatchedConfigMessage(msg) {
+  return !msg.ruleId
+    && typeof msg.message === 'string'
+    && msg.message.includes('no matching configuration was supplied');
+}
+
+function makeEslintFinding(filePath, msg) {
+  return {
+    file: filePath,
+    line: msg.line || 0,
+    col: msg.column || undefined,
+    tag: classifyRule(msg.ruleId),
+    rule: msg.ruleId || 'parse-error',
+    severity: msg.severity === 2 ? 'error' : 'warning',
+    message: msg.message,
+  };
+}
+
 function classifyRule(ruleId) {
   if (!ruleId) return 'LINTER';
   // sonarjs rules — check before generic sets
@@ -92,37 +130,10 @@ export default {
     if (exitCode === 2 && !stdout.trim()) {
       throw new Error(`eslint error: ${stderr.slice(0, 500)}`);
     }
-
     if (!stdout.trim()) return [];
 
-    let results;
-    try {
-      results = JSON.parse(stdout);
-    } catch {
-      throw new Error(`eslint: failed to parse JSON output: ${stdout.slice(0, 200)}`);
-    }
-
-    const findings = [];
-    for (const fileResult of results) {
-      if (!fileResult.messages || fileResult.messages.length === 0) continue;
-
-      for (const msg of fileResult.messages) {
-        // ESLint v9 flat config emits this for files with no matching config — not a real finding
-        if (!msg.ruleId && msg.message && msg.message.includes('no matching configuration was supplied')) continue;
-
-        findings.push({
-          file: fileResult.filePath,
-          line: msg.line || 0,
-          col: msg.column || undefined,
-          tag: classifyRule(msg.ruleId),
-          rule: msg.ruleId || 'parse-error',
-          severity: msg.severity === 2 ? 'error' : 'warning',
-          message: msg.message,
-        });
-      }
-    }
-
-    return findings;
+    const results = parseEslintJson(stdout);
+    return results.flatMap(fileResult => collectEslintFindings(fileResult));
   },
 
   async checkInstalled() {

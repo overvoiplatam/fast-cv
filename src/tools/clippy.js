@@ -15,6 +15,31 @@ function classifyLint(lintName) {
   return 'LINTER';
 }
 
+function makeClippyFinding(item) {
+  if (item.reason !== 'compiler-message') return null;
+  const msg = item.message;
+  if (!msg || msg.level === 'note') return null;
+
+  const span = pickPrimarySpan(msg.spans);
+  if (!span) return null;
+
+  const lintName = msg.code?.code || '';
+  return {
+    file: span.file_name,
+    line: span.line_start || 0,
+    col: span.column_start || undefined,
+    tag: classifyLint(lintName),
+    rule: lintName || 'clippy',
+    severity: msg.level === 'error' ? 'error' : 'warning',
+    message: msg.message,
+  };
+}
+
+function pickPrimarySpan(spans) {
+  if (!Array.isArray(spans) || spans.length === 0) return null;
+  return spans.find(s => s.is_primary) || spans.at(0);
+}
+
 export default {
   name: 'clippy',
   extensions: ['.rs'],
@@ -35,32 +60,13 @@ export default {
     if (exitCode >= 101) {
       throw new Error(`clippy error (exit ${exitCode}): ${(stderr || stdout).slice(0, 500)}`);
     }
-
     if (!stdout.trim()) return [];
 
-    const items = parseJsonLines(stdout);
     const findings = [];
-
-    for (const item of items) {
-      if (item.reason !== 'compiler-message') continue;
-      const msg = item.message;
-      if (!msg || msg.level === 'note') continue;
-
-      const span = (msg.spans || []).find(s => s.is_primary) || msg.spans?.[0];
-      if (!span) continue;
-
-      const lintName = msg.code?.code || '';
-      findings.push({
-        file: span.file_name,
-        line: span.line_start || 0,
-        col: span.column_start || undefined,
-        tag: classifyLint(lintName),
-        rule: lintName || 'clippy',
-        severity: msg.level === 'error' ? 'error' : 'warning',
-        message: msg.message,
-      });
+    for (const item of parseJsonLines(stdout)) {
+      const finding = makeClippyFinding(item);
+      if (finding) findings.push(finding);
     }
-
     return findings;
   },
 

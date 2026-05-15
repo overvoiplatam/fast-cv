@@ -10,8 +10,9 @@ const USER_DEFAULTS_DIR = join(homedir(), '.config', 'fast-cv', 'defaults');
 // Tool name → array of config filenames to look for (in priority order).
 // Map (not object literal) so dynamic key access via toolName doesn't
 // trip eslint-plugin-security's detect-object-injection rule.
+const PYPROJECT = 'pyproject.toml';
 const TOOL_CONFIG_FILES = new Map([
-  ['ruff', ['ruff.toml', '.ruff.toml', 'pyproject.toml']],
+  ['ruff', ['ruff.toml', '.ruff.toml', PYPROJECT]],
   ['eslint', [
     'eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs',
     '.eslintrc.json', '.eslintrc.js', '.eslintrc.yml', '.eslintrc.yaml', '.eslintrc',
@@ -21,7 +22,7 @@ const TOOL_CONFIG_FILES = new Map([
   ['golangci-lint', ['.golangci.yml', '.golangci.yaml', '.golangci.toml', '.golangci.json']],
   ['jscpd', ['.jscpd.json']],
   ['trivy', ['trivy.yaml', '.trivy.yaml']],
-  ['mypy', ['mypy.ini', '.mypy.ini', 'setup.cfg', 'pyproject.toml']],
+  ['mypy', ['mypy.ini', '.mypy.ini', 'setup.cfg', PYPROJECT]],
   ['typos', ['typos.toml', '.typos.toml', '_typos.toml']],
   ['vulture', []],  // reads pyproject.toml [tool.vulture] natively
   ['knip', ['knip.json', 'knip.jsonc', '.knip.json']],
@@ -31,7 +32,7 @@ const TOOL_CONFIG_FILES = new Map([
     '.stylelintrc', '.stylelintrc.json', '.stylelintrc.yml', '.stylelintrc.yaml',
     'stylelint.config.js', 'stylelint.config.mjs', 'stylelint.config.cjs',
   ]],
-  ['sqlfluff', ['.sqlfluff', 'setup.cfg', 'pyproject.toml']],
+  ['sqlfluff', ['.sqlfluff', 'setup.cfg', PYPROJECT]],
   ['docspec', ['docspec.json', '.docspec.json']],
   ['spectral', ['.spectral.yaml', '.spectral.yml', '.spectral.json', '.spectral.js']],
   ['markdownlint', [

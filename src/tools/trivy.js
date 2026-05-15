@@ -15,6 +15,74 @@ function formatTrivyVulnMessage(vuln) {
   return `Vulnerable dependency: ${vuln.PkgName}@${vuln.InstalledVersion} has ${vuln.VulnerabilityID} (${vuln.Severity}). ${fixGuidance}. ${vuln.Title}`;
 }
 
+const HIGH_OR_CRITICAL = new Set(['CRITICAL', 'HIGH']);
+
+function parseTrivyJson(stdout) {
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    throw new Error(`trivy: failed to parse JSON output: ${stdout.slice(0, 200)}`);
+  }
+}
+
+function toEntryFindings(entry) {
+  const target = entry.Target || 'unknown';
+  return [
+    ...(entry.Vulnerabilities || []).map(v => vulnFinding(target, v)),
+    ...(entry.Misconfigurations || []).map(m => misconfigFinding(target, m)),
+    ...(entry.Secrets || []).map(s => secretFinding(target, s)),
+    ...(entry.Licenses || []).filter(l => HIGH_OR_CRITICAL.has(l.Severity)).map(l => licenseFinding(target, l)),
+  ];
+}
+
+function vulnFinding(target, vuln) {
+  return {
+    file: target,
+    line: 0,
+    col: undefined,
+    tag: 'DEPENDENCY',
+    rule: vuln.VulnerabilityID || 'unknown-cve',
+    severity: HIGH_OR_CRITICAL.has(vuln.Severity) ? 'error' : 'warning',
+    message: formatTrivyVulnMessage(vuln),
+  };
+}
+
+function misconfigFinding(target, misconf) {
+  return {
+    file: target,
+    line: misconf.CauseMetadata?.StartLine || 0,
+    col: undefined,
+    tag: 'INFRA',
+    rule: misconf.ID || 'unknown-misconfig',
+    severity: HIGH_OR_CRITICAL.has(misconf.Severity) ? 'error' : 'warning',
+    message: misconf.Title || misconf.Message,
+  };
+}
+
+function secretFinding(target, secret) {
+  return {
+    file: target,
+    line: secret.StartLine || 0,
+    col: undefined,
+    tag: 'SECRET',
+    rule: secret.RuleID || 'secret',
+    severity: 'error',
+    message: `${secret.Category}: ${secret.Title} (match: ${secret.Match?.slice(0, 30)}...)`,
+  };
+}
+
+function licenseFinding(target, lic) {
+  return {
+    file: target,
+    line: 0,
+    col: undefined,
+    tag: 'LICENSE',
+    rule: lic.Name || 'unknown-license',
+    severity: 'error',
+    message: `Restrictive license: ${lic.PkgName} uses ${lic.Name} (${lic.Severity}). Consider replacing with an MIT/Apache-2.0 alternative`,
+  };
+}
+
 export default {
   name: 'trivy',
   extensions: ['.py', '.js', '.ts', '.go', '.java', '.rb', '.php', '.tf', '.yaml', '.yml', '.rs', '.kt', '.kts', '.cs', '.c', '.cpp', '.swift', '.sql'],
@@ -50,75 +118,8 @@ export default {
       }
       return [];
     }
-
-    let data;
-    try {
-      data = JSON.parse(stdout);
-    } catch {
-      throw new Error(`trivy: failed to parse JSON output: ${stdout.slice(0, 200)}`);
-    }
-
-    const results = data.Results || [];
-    const findings = [];
-
-    for (const entry of results) {
-      const target = entry.Target || 'unknown';
-
-      // Vulnerabilities → DEPENDENCY
-      for (const vuln of entry.Vulnerabilities || []) {
-        findings.push({
-          file: target,
-          line: 0,
-          col: undefined,
-          tag: 'DEPENDENCY',
-          rule: vuln.VulnerabilityID || 'unknown-cve',
-          severity: ['CRITICAL', 'HIGH'].includes(vuln.Severity) ? 'error' : 'warning',
-          message: formatTrivyVulnMessage(vuln),
-        });
-      }
-
-      // Misconfigurations → INFRA
-      for (const misconf of entry.Misconfigurations || []) {
-        findings.push({
-          file: target,
-          line: misconf.CauseMetadata?.StartLine || 0,
-          col: undefined,
-          tag: 'INFRA',
-          rule: misconf.ID || 'unknown-misconfig',
-          severity: ['CRITICAL', 'HIGH'].includes(misconf.Severity) ? 'error' : 'warning',
-          message: misconf.Title || misconf.Message,
-        });
-      }
-
-      // Secrets → SECRET
-      for (const secret of entry.Secrets || []) {
-        findings.push({
-          file: target,
-          line: secret.StartLine || 0,
-          col: undefined,
-          tag: 'SECRET',
-          rule: secret.RuleID || 'secret',
-          severity: 'error',
-          message: `${secret.Category}: ${secret.Title} (match: ${secret.Match?.slice(0, 30)}...)`,
-        });
-      }
-
-      // Licenses → LICENSE
-      for (const lic of entry.Licenses || []) {
-        if (!['CRITICAL', 'HIGH'].includes(lic.Severity)) continue;
-        findings.push({
-          file: target,
-          line: 0,
-          col: undefined,
-          tag: 'LICENSE',
-          rule: lic.Name || 'unknown-license',
-          severity: 'error',
-          message: `Restrictive license: ${lic.PkgName} uses ${lic.Name} (${lic.Severity}). Consider replacing with an MIT/Apache-2.0 alternative`,
-        });
-      }
-    }
-
-    return findings;
+    const data = parseTrivyJson(stdout);
+    return (data.Results || []).flatMap(toEntryFindings);
   },
 
   async checkInstalled() {

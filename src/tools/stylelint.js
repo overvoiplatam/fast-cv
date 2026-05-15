@@ -11,6 +11,29 @@ function classifyRule(rule) {
   return 'LINTER';
 }
 
+const STYLELINT_FATAL_EXITS = new Set([1, 78, 64]);
+
+function parseStylelintJson(stdout) {
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    throw new Error(`stylelint: failed to parse JSON output: ${stdout.slice(0, 200)}`);
+  }
+}
+
+function toStylelintFindings(fileResult) {
+  if (!fileResult.warnings || fileResult.warnings.length === 0) return [];
+  return fileResult.warnings.map(warn => ({
+    file: fileResult.source,
+    line: warn.line || 0,
+    col: warn.column || undefined,
+    tag: classifyRule(warn.rule),
+    rule: warn.rule || 'unknown',
+    severity: warn.severity === 'error' ? 'error' : 'warning',
+    message: warn.text,
+  }));
+}
+
 export default {
   name: 'stylelint',
   extensions: ['.css', '.scss', '.sass', '.less'],
@@ -31,37 +54,11 @@ export default {
 
   parseOutput(stdout, stderr, exitCode) {
     // 0=clean, 2=lint problems, 1=fatal, 78=bad config, 64=bad CLI
-    if ((exitCode === 1 || exitCode === 78 || exitCode === 64) && !stdout.trim()) {
+    if (STYLELINT_FATAL_EXITS.has(exitCode) && !stdout.trim()) {
       throw new Error(`stylelint error (exit ${exitCode}): ${(stderr || '').slice(0, 500)}`);
     }
-
     if (!stdout.trim()) return [];
-
-    let results;
-    try {
-      results = JSON.parse(stdout);
-    } catch {
-      throw new Error(`stylelint: failed to parse JSON output: ${stdout.slice(0, 200)}`);
-    }
-
-    const findings = [];
-    for (const fileResult of results) {
-      if (!fileResult.warnings || fileResult.warnings.length === 0) continue;
-
-      for (const warn of fileResult.warnings) {
-        findings.push({
-          file: fileResult.source,
-          line: warn.line || 0,
-          col: warn.column || undefined,
-          tag: classifyRule(warn.rule),
-          rule: warn.rule || 'unknown',
-          severity: warn.severity === 'error' ? 'error' : 'warning',
-          message: warn.text,
-        });
-      }
-    }
-
-    return findings;
+    return parseStylelintJson(stdout).flatMap(toStylelintFindings);
   },
 
   async checkInstalled() {

@@ -8,16 +8,34 @@ export function isStringArray(v) {
   return Array.isArray(v) && v.every(x => typeof x === 'string');
 }
 
+// Find `"<key>"` followed by optional whitespace and `:` in `source`,
+// using indexOf instead of constructing a regex from a runtime string.
+// This is structurally simpler than escaping every regex metacharacter
+// and avoids the eslint-plugin-security non-literal-regexp warning.
 function locateJsonKey(source, lineIndex, key) {
   if (typeof key !== 'string') return null;
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // `escaped` neutralizes every regex metacharacter, so the constructed
-  // RegExp matches only the literal JSON key — no injection surface.
-  // eslint-disable-next-line security/detect-non-literal-regexp
-  const re = new RegExp(`"${escaped}"\\s*:`);
-  const m = re.exec(source);
-  if (!m) return null;
-  return offsetToLineCol(lineIndex, m.index);
+  const needle = `"${key}"`;
+  let from = 0;
+  while (from <= source.length) {
+    const at = source.indexOf(needle, from);
+    if (at < 0) return null;
+    let after = at + needle.length;
+    while (after < source.length) {
+      const code = source.charCodeAt(after);
+      if (code === 58 /* ':' */) return offsetToLineCol(lineIndex, at);
+      if (!isJsonWhitespace(code)) break;
+      after++;
+    }
+    from = at + needle.length;
+  }
+  return null;
+}
+
+function isJsonWhitespace(code) {
+  return code === 32 /* space */
+    || code === 9 /* tab */
+    || code === 10 /* LF */
+    || code === 13 /* CR */;
 }
 
 function getPairKeyNode(doc, path) {
