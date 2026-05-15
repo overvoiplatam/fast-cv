@@ -22,7 +22,6 @@ export function getScanExitCode(results) {
   return EXIT_CLEAN;
 }
 
-// eslint-disable-next-line max-lines-per-function -- top-level CLI: declares every flag + dispatches the pipeline; splitting fragments the wiring
 export async function run(argv) {
   const program = new Command();
 
@@ -46,7 +45,6 @@ export async function run(argv) {
     .option('--no-docstring', 'suppress documentation findings (DOCS tag)', false)
     .option('--git-only [scope]', 'scan only git-changed files (default: uncommitted+unpushed; use --git-only=uncommitted for uncommitted only)', false)
     .addOption(new Option('-f, --format <type>', 'output format').choices(['markdown', 'sarif']).default('markdown'))
-    // eslint-disable-next-line max-lines-per-function, complexity, sonarjs/cognitive-complexity -- 12-step pipeline; each step is a discrete option-driven branch
     .action(async (directory, options) => {
       const targetDir = resolve(directory);
 

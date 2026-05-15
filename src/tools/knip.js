@@ -19,7 +19,6 @@ export default {
     };
   },
 
-  // eslint-disable-next-line complexity -- emits 5 distinct finding shapes (files/exports/types/dependencies/devDependencies) each with its own tag mapping
   parseOutput(stdout, stderr, exitCode) {
     // knip exits: 0 = clean, 1 = findings, 2+ = error
     if (!stdout.trim()) {

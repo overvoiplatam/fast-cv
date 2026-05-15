@@ -10,6 +10,11 @@ function formatTrivyError(stderr) {
   return `trivy error: ${message} Run fast-cv with --update-db to refresh the trivy databases before scanning, or rerun install.sh --mode all to warm the cache.`;
 }
 
+function formatTrivyVulnMessage(vuln) {
+  const fixGuidance = vuln.FixedVersion ? `Upgrade to ${vuln.FixedVersion}` : 'No fix available';
+  return `Vulnerable dependency: ${vuln.PkgName}@${vuln.InstalledVersion} has ${vuln.VulnerabilityID} (${vuln.Severity}). ${fixGuidance}. ${vuln.Title}`;
+}
+
 export default {
   name: 'trivy',
   extensions: ['.py', '.js', '.ts', '.go', '.java', '.rb', '.php', '.tf', '.yaml', '.yml', '.rs', '.kt', '.kts', '.cs', '.c', '.cpp', '.swift', '.sql'],
@@ -38,7 +43,6 @@ export default {
     return { bin: 'trivy', args };
   },
 
-  // eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- handles 5 trivy result shapes (Vulnerabilities/Misconfigurations/Secrets/Licenses/SBOM) plus DB-cache error normalization
   parseOutput(stdout, stderr, exitCode) {
     if (!stdout.trim()) {
       if (exitCode > 0 && stderr.trim()) {
@@ -69,7 +73,7 @@ export default {
           tag: 'DEPENDENCY',
           rule: vuln.VulnerabilityID || 'unknown-cve',
           severity: ['CRITICAL', 'HIGH'].includes(vuln.Severity) ? 'error' : 'warning',
-          message: `Vulnerable dependency: ${vuln.PkgName}@${vuln.InstalledVersion} has ${vuln.VulnerabilityID} (${vuln.Severity}). ${vuln.FixedVersion ? `Upgrade to ${vuln.FixedVersion}` : 'No fix available'}. ${vuln.Title}`,
+          message: formatTrivyVulnMessage(vuln),
         });
       }
 

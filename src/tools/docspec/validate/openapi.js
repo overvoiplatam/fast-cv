@@ -1,13 +1,13 @@
 import { isObject, finding, emitRemoteRefFindings } from './common.js';
+import { isOpenApiVersion } from '../version.js';
 
 const HTTP_METHODS = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
 
-// eslint-disable-next-line sonarjs/cognitive-complexity -- walks every OpenAPI structural check (paths, methods, params, responses) in one place
 export function validateOpenapi(ctx) {
   const findings = [];
   const { data } = ctx;
 
-  if (!/^3\.\d+(\.\d+)?$/.test(data.openapi)) {
+  if (!isOpenApiVersion(data.openapi)) {
     findings.push(finding(ctx, ['openapi'], 'openapi/version-format', 'error',
       `openapi field must be a semver string like "3.0.0"; got ${JSON.stringify(data.openapi)}`));
   }
@@ -27,13 +27,13 @@ export function validateOpenapi(ctx) {
         'paths must be an object (OpenAPI 3.1 allows webhooks or components as alternatives)'));
     }
   } else {
-    for (const key of Object.keys(data.paths)) {
+    // Iterate via Object.entries so we never do a computed-property access.
+    for (const [key, pathItem] of Object.entries(data.paths)) {
       if (key.startsWith('x-')) continue;
       if (!key.startsWith('/')) {
         findings.push(finding(ctx, ['paths', key], 'openapi/path-prefix', 'error',
           `"${key}" is not a valid path; OpenAPI path keys must start with "/"`));
       }
-      const pathItem = data.paths[key];
       if (!isObject(pathItem)) continue;
       for (const [opKey, op] of Object.entries(pathItem)) {
         if (!HTTP_METHODS.has(opKey)) continue;

@@ -7,51 +7,53 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_DEFAULTS_DIR = join(__dirname, '..', 'defaults');
 const USER_DEFAULTS_DIR = join(homedir(), '.config', 'fast-cv', 'defaults');
 
-// Map of tool name → array of config filenames to look for (in priority order)
-const TOOL_CONFIG_FILES = {
-  ruff: ['ruff.toml', '.ruff.toml', 'pyproject.toml'],
-  eslint: [
+// Tool name → array of config filenames to look for (in priority order).
+// Map (not object literal) so dynamic key access via toolName doesn't
+// trip eslint-plugin-security's detect-object-injection rule.
+const TOOL_CONFIG_FILES = new Map([
+  ['ruff', ['ruff.toml', '.ruff.toml', 'pyproject.toml']],
+  ['eslint', [
     'eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs',
     '.eslintrc.json', '.eslintrc.js', '.eslintrc.yml', '.eslintrc.yaml', '.eslintrc',
-  ],
-  semgrep: ['.semgrep.yml', '.semgrep.yaml', '.semgrep/'],
-  bearer: ['.bearer.yml', 'bearer.yml'],
-  'golangci-lint': ['.golangci.yml', '.golangci.yaml', '.golangci.toml', '.golangci.json'],
-  jscpd: ['.jscpd.json'],
-  trivy: ['trivy.yaml', '.trivy.yaml'],
-  mypy: ['mypy.ini', '.mypy.ini', 'setup.cfg', 'pyproject.toml'],
-  typos: ['typos.toml', '.typos.toml', '_typos.toml'],
-  vulture: [],  // reads pyproject.toml [tool.vulture] natively
-  knip: ['knip.json', 'knip.jsonc', '.knip.json'],
-  tsc: ['tsconfig.json'],
-  clippy: ['clippy.toml', '.clippy.toml'],
-  stylelint: [
+  ]],
+  ['semgrep', ['.semgrep.yml', '.semgrep.yaml', '.semgrep/']],
+  ['bearer', ['.bearer.yml', 'bearer.yml']],
+  ['golangci-lint', ['.golangci.yml', '.golangci.yaml', '.golangci.toml', '.golangci.json']],
+  ['jscpd', ['.jscpd.json']],
+  ['trivy', ['trivy.yaml', '.trivy.yaml']],
+  ['mypy', ['mypy.ini', '.mypy.ini', 'setup.cfg', 'pyproject.toml']],
+  ['typos', ['typos.toml', '.typos.toml', '_typos.toml']],
+  ['vulture', []],  // reads pyproject.toml [tool.vulture] natively
+  ['knip', ['knip.json', 'knip.jsonc', '.knip.json']],
+  ['tsc', ['tsconfig.json']],
+  ['clippy', ['clippy.toml', '.clippy.toml']],
+  ['stylelint', [
     '.stylelintrc', '.stylelintrc.json', '.stylelintrc.yml', '.stylelintrc.yaml',
     'stylelint.config.js', 'stylelint.config.mjs', 'stylelint.config.cjs',
-  ],
-  sqlfluff: ['.sqlfluff', 'setup.cfg', 'pyproject.toml'],
-  docspec: ['docspec.json', '.docspec.json'],
-  spectral: ['.spectral.yaml', '.spectral.yml', '.spectral.json', '.spectral.js'],
-  markdownlint: [
+  ]],
+  ['sqlfluff', ['.sqlfluff', 'setup.cfg', 'pyproject.toml']],
+  ['docspec', ['docspec.json', '.docspec.json']],
+  ['spectral', ['.spectral.yaml', '.spectral.yml', '.spectral.json', '.spectral.js']],
+  ['markdownlint', [
     '.markdownlint.json', '.markdownlint.yaml', '.markdownlint.yml',
     '.markdownlint-cli2.jsonc', '.markdownlint-cli2.yaml',
-  ],
-  vale: ['.vale.ini', 'vale.ini'],
-};
+  ]],
+  ['vale', ['.vale.ini', 'vale.ini']],
+]);
 
-// Map of tool name → default config filename shipped with fast-cv
-const PACKAGE_DEFAULT_FILES = {
-  ruff: 'ruff.toml',
-  eslint: 'eslint.config.mjs',
-  semgrep: 'semgrep',  // directory — semgrep reads all YAML files inside
-  mypy: 'mypy.ini',
-  stylelint: '.stylelintrc.json',
-  'golangci-lint': '.golangci.yml',
-  docspec: 'docspec.json',
-  spectral: '.spectral.yaml',
-  markdownlint: '.markdownlint.json',
-  vale: '.vale.ini',
-};
+// Tool name → default config filename shipped with fast-cv.
+const PACKAGE_DEFAULT_FILES = new Map([
+  ['ruff', 'ruff.toml'],
+  ['eslint', 'eslint.config.mjs'],
+  ['semgrep', 'semgrep'],  // directory — semgrep reads all YAML files inside
+  ['mypy', 'mypy.ini'],
+  ['stylelint', '.stylelintrc.json'],
+  ['golangci-lint', '.golangci.yml'],
+  ['docspec', 'docspec.json'],
+  ['spectral', '.spectral.yaml'],
+  ['markdownlint', '.markdownlint.json'],
+  ['vale', '.vale.ini'],
+]);
 
 async function fileExists(filePath) {
   try {
@@ -63,7 +65,7 @@ async function fileExists(filePath) {
 }
 
 export async function resolveConfig(toolName, targetDir) {
-  const localCandidates = TOOL_CONFIG_FILES[toolName] || [];
+  const localCandidates = TOOL_CONFIG_FILES.get(toolName) || [];
 
   // 1. Check local directory
   for (const filename of localCandidates) {
@@ -74,7 +76,7 @@ export async function resolveConfig(toolName, targetDir) {
   }
 
   // 2. Check user global defaults
-  const defaultFile = PACKAGE_DEFAULT_FILES[toolName];
+  const defaultFile = PACKAGE_DEFAULT_FILES.get(toolName);
   if (defaultFile) {
     const userPath = join(USER_DEFAULTS_DIR, defaultFile);
     if (await fileExists(userPath)) {

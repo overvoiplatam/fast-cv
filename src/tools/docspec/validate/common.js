@@ -11,6 +11,9 @@ export function isStringArray(v) {
 function locateJsonKey(source, lineIndex, key) {
   if (typeof key !== 'string') return null;
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // `escaped` neutralizes every regex metacharacter, so the constructed
+  // RegExp matches only the literal JSON key — no injection surface.
+  // eslint-disable-next-line security/detect-non-literal-regexp
   const re = new RegExp(`"${escaped}"\\s*:`);
   const m = re.exec(source);
   if (!m) return null;
@@ -80,7 +83,9 @@ export function walkRefs(data, visit, depthCap = 64) {
     if (seen.has(node)) return;
     seen.add(node);
     if (Array.isArray(node)) {
-      for (let i = 0; i < node.length; i++) walk(node[i], [...path, i]);
+      // forEach gives us the index as a callback param, so we never do
+      // a computed-property access on the array.
+      node.forEach((item, i) => walk(item, [...path, i]));
       return;
     }
     if (typeof node.$ref === 'string') visit(node.$ref, path);

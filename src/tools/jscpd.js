@@ -54,7 +54,6 @@ export default {
     return { bin: 'jscpd', args, cwd: targetDir };
   },
 
-  // eslint-disable-next-line complexity -- reads JSON report file, falls back across exit codes, dedupes duplication entries by pair
   parseOutput(stdout, stderr, exitCode) {
     const outDir = _tmpDir;
     _tmpDir = null; // reset for next invocation

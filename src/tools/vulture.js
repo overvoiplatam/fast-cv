@@ -3,6 +3,9 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+// Anchored line-parser regex for vulture stdout. `(.+?)` bounded ahead by
+// `:<digits>:`. Input lines are vulture findings, sub-1KB; no untrusted surface.
+// eslint-disable-next-line sonarjs/slow-regex
 const LINE_RE = /^(.+?):(\d+):\s+(.+)\s+\((\d+)% confidence\)\s*$/;
 
 export default {

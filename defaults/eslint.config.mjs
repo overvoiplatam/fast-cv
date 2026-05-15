@@ -36,24 +36,28 @@ const config = [
     plugins: { sonarjs },
     rules: {
       ...(sonarjs.configs?.recommended?.rules ?? {}),
-      "sonarjs/cognitive-complexity": ["warn", 20],
+      "sonarjs/cognitive-complexity": ["warn", 15],
       // sonarjs v4 schema: { threshold } object, not a bare number
-      "sonarjs/no-duplicate-string": ["warn", { threshold: 5 }],
+      "sonarjs/no-duplicate-string": ["warn", { threshold: 3 }],
       "sonarjs/max-switch-cases": ["warn", 10],
       "sonarjs/no-identical-functions": "warn",
-      // Disabled: high false-positive rate, low signal.
-      //   publicly-writable-directories flags every /tmp literal.
-      "sonarjs/publicly-writable-directories": "off",
-      //   no-os-command-from-path: bare PATH lookup is the correct way
-      //   to invoke external CLIs (eslint, git, ruff, …).
+      // Disabled with audit-grade justification:
+      //   no-os-command-from-path flags every `execFile("eslint", …)` /
+      //   `execFile("git", …)` call. A tool orchestrator that runs other
+      //   CLIs MUST resolve them via PATH (we don't know where users
+      //   installed ruff/eslint/git on their machine). Hard-coding
+      //   absolute paths would break the product. The threat model
+      //   (attacker controls $PATH) requires shell-level compromise,
+      //   which is out of scope — the tool runs with user privileges.
       "sonarjs/no-os-command-from-path": "off",
-      //   slow-regex / unsafe-regex: we own the regex patterns (matching
-      //   our own tool output, not user input). DoS isn't in the threat
-      //   model. Projects scanning user input should re-enable locally.
-      "sonarjs/slow-regex": "off",
-      "sonarjs/single-character-alternation": "off",
-      "sonarjs/no-nested-template-literals": "off",
-      "sonarjs/no-nested-conditional": "off",
+      //   publicly-writable-directories fires on every `/tmp` literal.
+      //   In src/, fast-cv uses `mkdtemp(/tmp/fast-cv-XXXXXX)` (random
+      //   suffix → race-free) for transient tool I/O — the documented-
+      //   safe pattern. The rule cannot distinguish mkdtemp from raw
+      //   `/tmp/static-name`, so it false-positives uniformly. Disabled
+      //   project-wide; if a future change adds raw /tmp paths the
+      //   security-review checklist (architecture.md) must catch it.
+      "sonarjs/publicly-writable-directories": "off",
     },
   }] : []),
 
@@ -80,18 +84,19 @@ const config = [
         varsIgnorePattern: "^_",
       }],
       "no-unreachable": "error",
-      // Thresholds tuned to industry-common values (eslint's defaults are
-      // quite tight); projects that want stricter checks can override.
-      "complexity": ["warn", { "max": 20 }],
+      // Thresholds set at industry-strict levels (sonarjs/eslint defaults).
+      // Our own code is expected to pass these — refactor, don't relax.
+      "complexity": ["warn", { "max": 15 }],
       "max-depth": ["warn", 4],
-      "max-lines-per-function": ["warn", { "max": 150, "skipBlankLines": true, "skipComments": true }],
-      "max-nested-callbacks": ["warn", 4],
+      "max-lines-per-function": ["warn", { "max": 100, "skipBlankLines": true, "skipComments": true }],
+      "max-nested-callbacks": ["warn", 3],
     },
   },
 
   // ─── eslint-plugin-security ────────────────────────────────────────
-  // Spread the recommended ruleset, then disable the rules that produce
-  // mostly false positives in code-scanning and file-handling projects.
+  // Spread the recommended ruleset. Every disable below has an
+  // audit-defensible justification documented inline — we do not
+  // silence rules just to make the linter quiet.
   ...(security ? [{
     files: codeFiles,
     plugins: { security },
@@ -111,20 +116,27 @@ const config = [
         "security/detect-pseudoRandomBytes": "warn",
         "security/detect-unsafe-regex": "warn",
       }),
-      // Off: fires on every fs call with a variable path. Any tool that
-      // reads user-supplied files trips this on every line. No signal.
-      "security/detect-non-literal-fs-filename": "off",
-      // Off: false-positive heavy on legitimate object property access.
-      "security/detect-object-injection": "off",
-      // Off: fires when RegExp is built from a non-literal — fine for
-      // configs and patterns loaded from disk.
-      "security/detect-non-literal-regexp": "off",
-      // Off: irrelevant for ESM; we don't use require() at all.
+      // Off: ESM-only project. require() is not used; rule is unreachable.
       "security/detect-non-literal-require": "off",
-      // Off: ReDoS risk only matters when regex is applied to attacker-
-      // controlled input. fast-cv-style tools regex their own output;
-      // re-enable locally if scanning user-supplied strings.
-      "security/detect-unsafe-regex": "off",
+      // Off with audit-grade justification:
+      //   detect-non-literal-fs-filename fires when an fs.* call receives
+      //   a variable path. A code-scanning tool reads paths by design —
+      //   every adapter (ruff, eslint, semgrep, …) calls fs against the
+      //   user-supplied target directory.
+      //
+      //   Trust boundary: paths originate from one of three places:
+      //     (1) the user's CLI argument (target dir + --exclude/--only),
+      //     (2) the pruner walking that dir (gitignore/.fcvignore filtered),
+      //     (3) shipped configs in defaults/ + user defaults in
+      //         ~/.config/fast-cv/.
+      //   The tool runs with the user's own privileges; there is no
+      //   privilege boundary to cross. Path traversal is prevented at
+      //   src/pruner.js by resolving entries against the target root.
+      //
+      //   Keeping the rule on would require 100+ per-line suppressions
+      //   citing this same justification. Disabled globally; the trust
+      //   boundary is documented in docs/architecture.md → Security.
+      "security/detect-non-literal-fs-filename": "off",
     },
   }] : []),
 

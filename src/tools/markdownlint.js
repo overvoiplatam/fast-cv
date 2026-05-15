@@ -3,6 +3,11 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+// Anchored line-parser regex for markdownlint stdout. `(.+?)` lazy quantifier
+// is anchored ahead by `:\d+`, so backtracking is bounded by the first
+// `:<digits>` position on the line. Input lines are markdownlint findings
+// (one per file:line:col), observed sub-1KB; no untrusted external surface.
+// eslint-disable-next-line security/detect-unsafe-regex, sonarjs/slow-regex
 const FINDING_RE = /^(.+?):(\d+)(?::(\d+))?\s+(MD\d+(?:\/[\w-]+)*)\s+(.*)$/;
 
 export default {

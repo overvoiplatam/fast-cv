@@ -3,6 +3,10 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+// Anchored line-parser regex for `tsc --noEmit --pretty false` output.
+// `(.+?)` is bounded ahead by the literal `(<digits>,<digits>):`, so
+// backtracking is limited. Input lines are tsc diagnostics, sub-2KB.
+// eslint-disable-next-line sonarjs/slow-regex
 const LINE_RE = /^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+(TS\d+):\s+(.+)$/;
 
 export default {
