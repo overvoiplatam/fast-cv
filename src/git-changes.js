@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { realpath } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 
 function exec(cmd, args, cwd) {
@@ -22,9 +23,16 @@ function exec(cmd, args, cwd) {
  * @returns {Promise<string[]>} Deduplicated, sorted, relative paths
  */
 export async function getGitChangedFiles(targetDir, scope = 'all') {
+  // Canonicalize targetDir so symlink-resolved paths match what
+  // `git rev-parse --show-toplevel` returns. Critical on macOS where
+  // /tmp -> /private/tmp and /var/folders/... -> /private/var/folders/...
+  // — without this, every relative() call below produces "../private/..."
+  // and the result set ends up empty.
+  const canonicalTarget = await realpath(targetDir);
+
   let repoRoot;
   try {
-    repoRoot = (await exec('git', ['rev-parse', '--show-toplevel'], targetDir)).trim();
+    repoRoot = (await exec('git', ['rev-parse', '--show-toplevel'], canonicalTarget)).trim();
   } catch {
     throw new Error(`Not a git repository: ${targetDir}`);
   }
@@ -63,7 +71,7 @@ export async function getGitChangedFiles(targetDir, scope = 'all') {
   const result = [];
   for (const f of files) {
     const abs = resolve(repoRoot, f);
-    const rel = relative(targetDir, abs);
+    const rel = relative(canonicalTarget, abs);
     // Skip files outside the target directory
     if (rel.startsWith('..')) continue;
     result.push(rel);

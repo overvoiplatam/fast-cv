@@ -26,13 +26,26 @@ const tsFiles = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
 const codeFiles = tseslint ? [...jsFiles, ...tsFiles] : jsFiles;
 
 const config = [
-  // ─── sonarjs recommended (JS + TS) ─────────────────────────────────
-  ...(sonarjs?.configs?.recommended ? [sonarjs.configs.recommended] : []),
+  // ─── sonarjs (recommended rules + project overrides) ───────────────
+  // Register the plugin once. ESLint 10+ rejects duplicate plugin
+  // declarations, so we cannot also spread sonarjs.configs.recommended
+  // (which registers `plugins: { sonarjs }`) AND register the plugin in
+  // the base rules block — pick one home for the registration.
+  ...(sonarjs ? [{
+    files: codeFiles,
+    plugins: { sonarjs },
+    rules: {
+      ...(sonarjs.configs?.recommended?.rules ?? {}),
+      "sonarjs/cognitive-complexity": ["warn", 15],
+      "sonarjs/no-duplicate-string": ["warn", 3],
+      "sonarjs/max-switch-cases": ["warn", 10],
+      "sonarjs/no-identical-functions": "warn",
+    },
+  }] : []),
 
   // ─── Base rules (JS + TS) ──────────────────────────────────────────
   {
     files: codeFiles,
-    ...(sonarjs ? { plugins: { sonarjs } } : {}),
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -51,13 +64,6 @@ const config = [
       "max-depth": ["warn", 4],
       "max-lines-per-function": ["warn", { "max": 50, "skipBlankLines": true, "skipComments": true }],
       "max-nested-callbacks": ["warn", 3],
-      // sonarjs overrides (only active if plugin loaded)
-      ...(sonarjs ? {
-        "sonarjs/cognitive-complexity": ["warn", 15],
-        "sonarjs/no-duplicate-string": ["warn", 3],
-        "sonarjs/max-switch-cases": ["warn", 10],
-        "sonarjs/no-identical-functions": "warn",
-      } : {}),
     },
   },
 

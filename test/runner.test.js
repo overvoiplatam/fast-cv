@@ -1,6 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import { runTools } from '../src/runner.js';
+
+// On macOS /tmp is a symlink to /private/tmp; getcwd() inside the spawned
+// process returns the canonical path, so we compare against that.
+const TMP_CANONICAL = realpathSync('/tmp');
 
 describe('runTools', () => {
   // Shared mock tool factory — override any property as needed
@@ -142,14 +147,14 @@ describe('runTools', () => {
   it('passes cwd from buildCommand to spawn', async () => {
     const results = await runOne(
       makeTool('cwd-tool', {
-        buildCommand() { return { bin: 'pwd', args: [], cwd: '/tmp' }; },
+        buildCommand() { return { bin: 'pwd', args: [], cwd: TMP_CANONICAL }; },
       }),
       '/some/other/dir',
     );
 
     assert.equal(results.length, 1);
     assert.equal(results[0].error, null);
-    assert.equal(results[0].findings[0].message, '/tmp');
+    assert.equal(results[0].findings[0].message, TMP_CANONICAL);
   });
 
   it('passes files and fix to buildCommand', async () => {
