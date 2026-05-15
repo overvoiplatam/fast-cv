@@ -122,3 +122,11 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           fast-cv --version
+      # Dogfood: scan fast-cv with fast-cv. Every tool that just got
+      # installed runs against our own source. Exits non-zero on any
+      # finding, so the audit signal is "our shipped rules pass against
+      # the codebase that ships them" — on every push, on both OSes.
+      - name: fast-cv self-scan
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          fast-cv .
