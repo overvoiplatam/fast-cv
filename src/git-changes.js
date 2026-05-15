@@ -26,57 +26,68 @@ export async function getGitChangedFiles(targetDir, scope = 'all') {
   // Canonicalize targetDir so symlink-resolved paths match what
   // `git rev-parse --show-toplevel` returns. Critical on macOS where
   // /tmp -> /private/tmp and /var/folders/... -> /private/var/folders/...
-  // — without this, every relative() call below produces "../private/..."
-  // and the result set ends up empty.
   const canonicalTarget = await realpath(targetDir);
-
-  let repoRoot;
-  try {
-    repoRoot = (await exec('git', ['rev-parse', '--show-toplevel'], canonicalTarget)).trim();
-  } catch {
-    throw new Error(`Not a git repository: ${targetDir}`);
-  }
+  const repoRoot = await resolveRepoRoot(canonicalTarget, targetDir);
 
   const files = new Set();
+  await collectUncommittedPaths(repoRoot, files);
+  if (scope === 'all') await collectUnpushedPaths(repoRoot, files);
 
-  // Uncommitted: staged + modified + untracked
+  return relativizeToTarget(files, repoRoot, canonicalTarget);
+}
+
+async function resolveRepoRoot(canonicalTarget, originalTarget) {
+  try {
+    const stdout = await exec('git', ['rev-parse', '--show-toplevel'], canonicalTarget);
+    return stdout.trim();
+  } catch {
+    throw new Error(`Not a git repository: ${originalTarget}`);
+  }
+}
+
+async function collectUncommittedPaths(repoRoot, files) {
   const porcelain = await exec('git', ['status', '--porcelain', '-uall'], repoRoot);
   for (const line of porcelain.split('\n')) {
-    if (!line) continue;
-    const xy = line.slice(0, 2);
-    // Skip deleted files
-    if (xy[1] === 'D' || (xy[0] === 'D' && xy[1] === ' ')) continue;
-    let path = line.slice(3);
-    // Handle renames: "R  old -> new"
-    const arrow = path.indexOf(' -> ');
-    if (arrow !== -1) path = path.slice(arrow + 4);
-    files.add(path);
+    const path = extractPorcelainPath(line);
+    if (path) files.add(path);
   }
+}
 
-  // Unpushed commits (only for scope 'all')
-  if (scope === 'all') {
-    try {
-      const log = await exec(
-        'git', ['log', '@{upstream}..HEAD', '--name-only', '--pretty=format:'], repoRoot,
-      );
-      for (const line of log.split('\n')) {
-        if (line.trim()) files.add(line.trim());
-      }
-    } catch {
-      // No upstream set (new branch) — gracefully skip
-    }
+function extractPorcelainPath(line) {
+  if (!line) return null;
+  const xy = line.slice(0, 2);
+  if (isDeletedStatus(xy)) return null;
+  const rest = line.slice(3);
+  // Handle renames: "R  old -> new"
+  const arrow = rest.indexOf(' -> ');
+  return arrow !== -1 ? rest.slice(arrow + 4) : rest;
+}
+
+function isDeletedStatus(xy) {
+  return xy.at(1) === 'D' || (xy.at(0) === 'D' && xy.at(1) === ' ');
+}
+
+async function collectUnpushedPaths(repoRoot, files) {
+  let log;
+  try {
+    log = await exec('git', ['log', '@{upstream}..HEAD', '--name-only', '--pretty=format:'], repoRoot);
+  } catch {
+    return;  // No upstream set (new branch) — gracefully skip
   }
+  for (const line of log.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed) files.add(trimmed);
+  }
+}
 
-  // Convert repo-root-relative paths to targetDir-relative paths
+function relativizeToTarget(files, repoRoot, canonicalTarget) {
   const result = [];
   for (const f of files) {
     const abs = resolve(repoRoot, f);
     const rel = relative(canonicalTarget, abs);
-    // Skip files outside the target directory
     if (rel.startsWith('..')) continue;
     result.push(rel);
   }
-
   result.sort();
   return result;
 }

@@ -18,6 +18,62 @@ function getTmpDir() {
   return _tmpDir;
 }
 
+function consumeJscpdOutDir() {
+  const outDir = _tmpDir;
+  _tmpDir = null;
+  return outDir;
+}
+
+function throwIfJscpdError(returnValue, stderr, exitCode) {
+  if (exitCode > 1) {
+    throw new Error(`jscpd error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
+  }
+  return returnValue;
+}
+
+function loadJscpdReport(outDir, stderr, exitCode) {
+  try {
+    const raw = readFileSync(join(outDir, 'jscpd-report.json'), 'utf-8');
+    cleanupOutDir(outDir);
+    return JSON.parse(raw);
+  } catch {
+    cleanupOutDir(outDir);
+    throwIfJscpdError(null, stderr, exitCode);
+    return null;
+  }
+}
+
+function cleanupOutDir(outDir) {
+  try { rmSync(outDir, { recursive: true, force: true }); } catch { /* noop */ }
+}
+
+function makeDuplicatePair(dup) {
+  const first = dup.firstFile || {};
+  const second = dup.secondFile || {};
+  const lines = dup.lines || 0;
+  const tokens = dup.tokens || 0;
+  const format = dup.format || 'unknown';
+  return [
+    duplicateFinding(first, second, lines, tokens, format),
+    duplicateFinding(second, first, lines, tokens, format),
+  ];
+}
+
+function duplicateFinding(selfFile, pairFile, lines, tokens, format) {
+  const pairLine = pairFile.startLoc?.line || pairFile.start || '?';
+  const pairName = pairFile.name || 'unknown';
+  return {
+    file: selfFile.name || 'unknown',
+    line: selfFile.startLoc?.line || selfFile.start || 0,
+    col: selfFile.startLoc?.column || undefined,
+    tag: 'DUPLICATION',
+    rule: `jscpd/${format}`,
+    severity: 'warning',
+    message: `Duplicated block (${lines} lines, ${tokens} tokens) — also in ${pairName}:${pairLine}`,
+    otherFile: pairFile.name || undefined,
+  };
+}
+
 export default {
   name: 'jscpd',
   // Cross-language: runs on all scannable extensions
@@ -55,67 +111,13 @@ export default {
   },
 
   parseOutput(stdout, stderr, exitCode) {
-    const outDir = _tmpDir;
-    _tmpDir = null; // reset for next invocation
+    const outDir = consumeJscpdOutDir();
+    if (!outDir) return throwIfJscpdError([], stderr, exitCode);
 
-    if (!outDir) {
-      if (exitCode > 1) {
-        throw new Error(`jscpd error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
-      }
-      return [];
-    }
+    const report = loadJscpdReport(outDir, stderr, exitCode);
+    if (!report) return [];
 
-    let report;
-    try {
-      const raw = readFileSync(join(outDir, 'jscpd-report.json'), 'utf-8');
-      report = JSON.parse(raw);
-    } catch {
-      // Clean up and return empty if no report file
-      try { rmSync(outDir, { recursive: true, force: true }); } catch { /* noop */ }
-      if (exitCode > 1) {
-        throw new Error(`jscpd error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
-      }
-      return [];
-    }
-
-    // Clean up temp dir
-    try { rmSync(outDir, { recursive: true, force: true }); } catch { /* noop */ }
-
-    const duplicates = report.duplicates || [];
-    const findings = [];
-
-    for (const dup of duplicates) {
-      const firstFile = dup.firstFile || {};
-      const secondFile = dup.secondFile || {};
-      const lines = dup.lines || 0;
-      const tokens = dup.tokens || 0;
-      const format = dup.format || 'unknown';
-
-      // Emit two findings — one per file in the clone pair
-      findings.push({
-        file: firstFile.name || 'unknown',
-        line: firstFile.startLoc?.line || firstFile.start || 0,
-        col: firstFile.startLoc?.column || undefined,
-        tag: 'DUPLICATION',
-        rule: `jscpd/${format}`,
-        severity: 'warning',
-        message: `Duplicated block (${lines} lines, ${tokens} tokens) — also in ${secondFile.name || 'unknown'}:${secondFile.startLoc?.line || secondFile.start || '?'}`,
-        otherFile: secondFile.name || undefined,
-      });
-
-      findings.push({
-        file: secondFile.name || 'unknown',
-        line: secondFile.startLoc?.line || secondFile.start || 0,
-        col: secondFile.startLoc?.column || undefined,
-        tag: 'DUPLICATION',
-        rule: `jscpd/${format}`,
-        severity: 'warning',
-        message: `Duplicated block (${lines} lines, ${tokens} tokens) — also in ${firstFile.name || 'unknown'}:${firstFile.startLoc?.line || firstFile.start || '?'}`,
-        otherFile: firstFile.name || undefined,
-      });
-    }
-
-    return findings;
+    return (report.duplicates || []).flatMap(makeDuplicatePair);
   },
 
   async checkInstalled() {

@@ -12,6 +12,45 @@ const SKIP_PATHS = [
   'coverage', '.cache',
 ];
 
+const BEARER_HIGH_SEVERITIES = new Set(['critical', 'high']);
+
+function parseBearerJson(stdout) {
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    throw new Error(`bearer: failed to parse JSON output: ${stdout.slice(0, 200)}`);
+  }
+}
+
+function toBearerFindings(item) {
+  const locations = item.locations || [item];
+  return locations.map(loc => makeBearerFinding(item, loc));
+}
+
+function makeBearerFinding(item, loc) {
+  return {
+    file: pickFileName(item, loc),
+    line: pickLineNumber(loc),
+    col: pickColumnNumber(loc),
+    tag: 'PRIVACY',
+    rule: item.rule_id || item.id || 'unknown',
+    severity: BEARER_HIGH_SEVERITIES.has(item.severity) ? 'error' : 'warning',
+    message: item.title || item.description || item.message || 'Privacy/data-flow issue detected',
+  };
+}
+
+function pickFileName(item, loc) {
+  return loc.filename || loc.file || item.filename || 'unknown';
+}
+
+function pickLineNumber(loc) {
+  return loc.line_number || loc.start?.line || 0;
+}
+
+function pickColumnNumber(loc) {
+  return loc.column_number || loc.start?.column || undefined;
+}
+
 export default {
   name: 'bearer',
   extensions: ['.py', '.js', '.jsx', '.ts', '.tsx', '.go', '.java', '.rb', '.php'],
@@ -41,34 +80,9 @@ export default {
       }
       return [];
     }
-
-    let data;
-    try {
-      data = JSON.parse(stdout);
-    } catch {
-      throw new Error(`bearer: failed to parse JSON output: ${stdout.slice(0, 200)}`);
-    }
-
-    const findings = [];
-
-    // Bearer outputs warnings array at top level or under specific keys
-    const warnings = data.warnings || data.findings || [];
-    for (const item of warnings) {
-      const locations = item.locations || [item];
-      for (const loc of locations) {
-        findings.push({
-          file: loc.filename || loc.file || item.filename || 'unknown',
-          line: loc.line_number || loc.start?.line || 0,
-          col: loc.column_number || loc.start?.column || undefined,
-          tag: 'PRIVACY',
-          rule: item.rule_id || item.id || 'unknown',
-          severity: item.severity === 'critical' || item.severity === 'high' ? 'error' : 'warning',
-          message: item.title || item.description || item.message || 'Privacy/data-flow issue detected',
-        });
-      }
-    }
-
-    return findings;
+    const data = parseBearerJson(stdout);
+    const items = data.warnings || data.findings || [];
+    return items.flatMap(toBearerFindings);
   },
 
   async checkInstalled() {

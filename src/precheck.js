@@ -28,56 +28,16 @@ async function tryAutoInstall(tool, verbose) {
 
 export async function precheck(tools, options = {}) {
   const { autoInstall = false, verbose = false } = options;
-
-  const missing = [];
-  const ready = [];
   const warnings = [];
 
-  // Check each tool in parallel
-  const checks = await Promise.allSettled(
-    tools.map(async (tool) => {
-      try {
-        const installed = await tool.checkInstalled();
-        return { tool, installed };
-      } catch {
-        return { tool, installed: false };
-      }
-    })
-  );
+  const { ready, missing } = await partitionByInstalled(tools);
+  if (missing.length === 0) return { ok: true, tools: ready, warnings };
 
-  for (const result of checks) {
-    const { tool, installed } = result.value;
-    if (installed) {
-      ready.push(tool);
-    } else {
-      missing.push({ tool });
-    }
-  }
-
-  if (missing.length === 0) {
-    return { ok: true, tools: ready, warnings };
-  }
-
-  // Attempt auto-install if requested
   if (autoInstall) {
-    for (const { tool } of missing) {
-      const success = await tryAutoInstall(tool, verbose);
-      if (success) {
-        // Verify it actually works now
-        const nowInstalled = await tool.checkInstalled();
-        if (nowInstalled) {
-          ready.push(tool);
-          warnings.push(`${tool.name}: auto-installed successfully`);
-          continue;
-        }
-      }
-      warnings.push(`${tool.name}: auto-install failed — ${tool.installHint}`);
-    }
-    // If we managed to install everything, proceed
+    await runAutoInstall(missing, ready, warnings, verbose);
     return { ok: true, tools: ready, warnings };
   }
 
-  // If some tools are ready, skip the missing ones gracefully
   if (ready.length > 0) {
     for (const { tool } of missing) {
       warnings.push(`${tool.name} not found — skipped (install: ${tool.installHint})`);
@@ -85,26 +45,48 @@ export async function precheck(tools, options = {}) {
     return { ok: true, tools: ready, warnings };
   }
 
-  // All tools missing — hard fail
-  const lines = [
-    '[PRECHECK FAILED] No tools available — all applicable tools are missing:\n',
-    '',
-  ];
+  return { ok: false, tools: ready, warnings, message: buildMissingMessage(missing) };
+}
 
+async function partitionByInstalled(tools) {
+  const ready = [];
+  const missing = [];
+  const checks = await Promise.allSettled(tools.map(async (tool) => {
+    try {
+      return { tool, installed: await tool.checkInstalled() };
+    } catch {
+      return { tool, installed: false };
+    }
+  }));
+  for (const result of checks) {
+    const { tool, installed } = result.value;
+    if (installed) ready.push(tool);
+    else missing.push({ tool });
+  }
+  return { ready, missing };
+}
+
+async function runAutoInstall(missing, ready, warnings, verbose) {
+  for (const { tool } of missing) {
+    const installed = await tryAutoInstall(tool, verbose) && await tool.checkInstalled();
+    if (installed) {
+      ready.push(tool);
+      warnings.push(`${tool.name}: auto-installed successfully`);
+    } else {
+      warnings.push(`${tool.name}: auto-install failed — ${tool.installHint}`);
+    }
+  }
+}
+
+function buildMissingMessage(missing) {
+  const lines = ['[PRECHECK FAILED] No tools available — all applicable tools are missing:\n', ''];
   for (const { tool } of missing) {
     lines.push(`  ${tool.name} (needed for ${tool.extensions.join(', ')} files)`);
     lines.push(`    Install: ${tool.installHint}`);
     lines.push('');
   }
-
   lines.push('Run with --auto-install to install missing tools automatically.');
   lines.push('Or run ./install.sh from the fast-cv repo for a full setup.');
   lines.push('');
-
-  return {
-    ok: false,
-    tools: ready,
-    warnings,
-    message: lines.join('\n'),
-  };
+  return lines.join('\n');
 }

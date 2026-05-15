@@ -8,6 +8,48 @@ function mapSeverity(s) {
   return 'warning';
 }
 
+function throwIfValeConfigError(raw) {
+  if (!raw.startsWith('{')) return;
+  let obj;
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    return;  // not parseable as a config-error object; fall through to normal handling
+  }
+  if (!obj || typeof obj !== 'object') return;
+  if (typeof obj.Code !== 'string' || !obj.Code.startsWith('E')) return;
+  const hint = obj.Code === 'E201'
+    ? 'run `vale sync` in your Vale config directory to populate styles'
+    : 'check your .vale.ini configuration';
+  throw new Error(`vale ${obj.Code}: ${obj.Text || 'config error'} — ${hint}`);
+}
+
+function parseValeJson(stdout) {
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    throw new Error(`vale: failed to parse JSON output: ${stdout.slice(0, 200)}`);
+  }
+}
+
+function toValeFindings(file, items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => makeValeFinding(file, item));
+}
+
+function makeValeFinding(file, item) {
+  const span = Array.isArray(item.Span) ? item.Span : [];
+  return {
+    file,
+    line: Number.isFinite(item.Line) ? item.Line : 1,
+    col: Number.isFinite(span[0]) ? span[0] : undefined,
+    tag: 'DOCS',
+    rule: `vale/${item.Check || 'unknown'}`,
+    severity: mapSeverity(item.Severity),
+    message: item.Message || '',
+  };
+}
+
 export default {
   name: 'vale',
   extensions: ['.md', '.markdown', '.rst', '.adoc', '.txt'],
@@ -26,21 +68,9 @@ export default {
     const raw = stdout.trim() || stderr.trim();
     if (!raw) return [];
 
-    // Vale emits config/style errors as a single non-array JSON object (usually on stderr).
-    // Parse those into an actionable tool error rather than dumping the JSON blob.
-    if (raw.startsWith('{')) {
-      try {
-        const obj = JSON.parse(raw);
-        if (obj && typeof obj === 'object' && typeof obj.Code === 'string' && obj.Code.startsWith('E')) {
-          const hint = obj.Code === 'E201'
-            ? 'run `vale sync` in your Vale config directory to populate styles'
-            : 'check your .vale.ini configuration';
-          throw new Error(`vale ${obj.Code}: ${obj.Text || 'config error'} — ${hint}`);
-        }
-      } catch (err) {
-        if (err.message.startsWith('vale ')) throw err;
-      }
-    }
+    // Vale emits config/style errors as a single non-array JSON object
+    // (usually on stderr). Surface those as actionable tool errors.
+    throwIfValeConfigError(raw);
 
     if (!stdout.trim()) {
       if (exitCode > 1 && stderr.trim()) {
@@ -49,30 +79,9 @@ export default {
       return [];
     }
 
-    let doc;
-    try {
-      doc = JSON.parse(stdout);
-    } catch {
-      throw new Error(`vale: failed to parse JSON output: ${stdout.slice(0, 200)}`);
-    }
+    const doc = parseValeJson(stdout);
     if (!doc || typeof doc !== 'object') return [];
-    const findings = [];
-    for (const [file, items] of Object.entries(doc)) {
-      if (!Array.isArray(items)) continue;
-      for (const item of items) {
-        const span = Array.isArray(item.Span) ? item.Span : [];
-        findings.push({
-          file,
-          line: Number.isFinite(item.Line) ? item.Line : 1,
-          col: Number.isFinite(span[0]) ? span[0] : undefined,
-          tag: 'DOCS',
-          rule: `vale/${item.Check || 'unknown'}`,
-          severity: mapSeverity(item.Severity),
-          message: item.Message || '',
-        });
-      }
-    }
-    return findings;
+    return Object.entries(doc).flatMap(([file, items]) => toValeFindings(file, items));
   },
 
   async checkInstalled() {

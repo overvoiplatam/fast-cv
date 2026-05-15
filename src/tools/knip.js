@@ -3,6 +3,58 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+function isKnipProjectIssue(stderr) {
+  if (!stderr) return false;
+  return stderr.includes('Unable to find') || stderr.includes('no such file');
+}
+
+function parseKnipJson(stdout) {
+  try {
+    // Strip non-JSON prefix (e.g. Svelte config warnings printed before JSON)
+    const jsonStart = stdout.indexOf('{');
+    const raw = jsonStart > 0 ? stdout.slice(jsonStart) : stdout;
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`knip: failed to parse JSON output: ${stdout.slice(0, 200)}`);
+  }
+}
+
+function unusedFileFinding(file) {
+  return {
+    file,
+    line: 0,
+    col: undefined,
+    tag: 'DEAD_CODE',
+    rule: 'knip/unused-file',
+    severity: 'warning',
+    message: 'Unused file — not imported or referenced by any other module',
+  };
+}
+
+function unusedExportFinding(item) {
+  return {
+    file: item.file || item.path || 'unknown',
+    line: item.line || item.row || 0,
+    col: item.col || undefined,
+    tag: 'DEAD_CODE',
+    rule: 'knip/unused-export',
+    severity: 'warning',
+    message: `Unused export: ${item.name || item.symbol || 'unknown'}`,
+  };
+}
+
+function packageFinding(item, ruleSuffix, label) {
+  return {
+    file: 'package.json',
+    line: 0,
+    col: undefined,
+    tag: 'DEAD_CODE',
+    rule: `knip/${ruleSuffix}`,
+    severity: 'warning',
+    message: `${label}: ${item.name || item}`,
+  };
+}
+
 export default {
   name: 'knip',
   extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'],
@@ -22,81 +74,19 @@ export default {
   parseOutput(stdout, stderr, exitCode) {
     // knip exits: 0 = clean, 1 = findings, 2+ = error
     if (!stdout.trim()) {
-      // Graceful handling for project-level issues
-      if (stderr && (stderr.includes('Unable to find') || stderr.includes('no such file'))) {
-        return [];
-      }
+      if (isKnipProjectIssue(stderr)) return [];
       if (exitCode >= 2 && stderr.trim()) {
         throw new Error(`knip error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
       }
       return [];
     }
-
-    let data;
-    try {
-      // Strip non-JSON prefix (e.g. Svelte config warnings printed before JSON)
-      const jsonStart = stdout.indexOf('{');
-      const raw = jsonStart > 0 ? stdout.slice(jsonStart) : stdout;
-      data = JSON.parse(raw);
-    } catch {
-      throw new Error(`knip: failed to parse JSON output: ${stdout.slice(0, 200)}`);
-    }
-
-    const findings = [];
-
-    // Unused files
-    for (const file of data.files || []) {
-      findings.push({
-        file,
-        line: 0,
-        col: undefined,
-        tag: 'DEAD_CODE',
-        rule: 'knip/unused-file',
-        severity: 'warning',
-        message: 'Unused file — not imported or referenced by any other module',
-      });
-    }
-
-    // Unused exports
-    for (const item of data.exports || []) {
-      findings.push({
-        file: item.file || item.path || 'unknown',
-        line: item.line || item.row || 0,
-        col: item.col || undefined,
-        tag: 'DEAD_CODE',
-        rule: 'knip/unused-export',
-        severity: 'warning',
-        message: `Unused export: ${item.name || item.symbol || 'unknown'}`,
-      });
-    }
-
-    // Unused dependencies
-    for (const item of data.dependencies || []) {
-      findings.push({
-        file: 'package.json',
-        line: 0,
-        col: undefined,
-        tag: 'DEAD_CODE',
-        rule: 'knip/unused-dependency',
-        severity: 'warning',
-        message: `Unused dependency: ${item.name || item}`,
-      });
-    }
-
-    // Unlisted dependencies
-    for (const item of data.unlisted || []) {
-      findings.push({
-        file: 'package.json',
-        line: 0,
-        col: undefined,
-        tag: 'DEAD_CODE',
-        rule: 'knip/unlisted-dependency',
-        severity: 'warning',
-        message: `Unlisted dependency: ${item.name || item}`,
-      });
-    }
-
-    return findings;
+    const data = parseKnipJson(stdout);
+    return [
+      ...(data.files || []).map(unusedFileFinding),
+      ...(data.exports || []).map(unusedExportFinding),
+      ...(data.dependencies || []).map(item => packageFinding(item, 'unused-dependency', 'Unused dependency')),
+      ...(data.unlisted || []).map(item => packageFinding(item, 'unlisted-dependency', 'Unlisted dependency')),
+    ];
   },
 
   async checkInstalled() {
