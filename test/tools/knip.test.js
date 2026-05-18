@@ -134,6 +134,21 @@ describe('knip adapter', () => {
     );
   });
 
+  it('includes stderr in the error when JSON parse fails', () => {
+    let caught;
+    try {
+      knip.parseOutput('Module load error?', 'TypeError: Cannot read property foo of undefined\n  at /home/u/knip.config.ts:3', 1);
+    } catch (e) {
+      caught = e;
+    }
+    assert.ok(caught, 'expected parseOutput to throw');
+    assert.match(caught.message, /failed to parse JSON/);
+    assert.match(caught.message, /stderr:/);
+    assert.match(caught.message, /TypeError: Cannot read property foo of undefined/);
+    assert.match(caught.message, /knip\.config\.ts/);
+    assert.match(caught.message, /stdout:/);
+  });
+
   it('handles string dependencies (not objects)', () => {
     const stdout = JSON.stringify({
       dependencies: ['lodash', 'moment'],

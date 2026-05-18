@@ -8,14 +8,20 @@ function isKnipProjectIssue(stderr) {
   return stderr.includes('Unable to find') || stderr.includes('no such file');
 }
 
-function parseKnipJson(stdout) {
+function parseKnipJson(stdout, stderr) {
   try {
     // Strip non-JSON prefix (e.g. Svelte config warnings printed before JSON)
     const jsonStart = stdout.indexOf('{');
     const raw = jsonStart > 0 ? stdout.slice(jsonStart) : stdout;
     return JSON.parse(raw);
   } catch {
-    throw new Error(`knip: failed to parse JSON output: ${stdout.slice(0, 200)}`);
+    // The real diagnostic is usually on stderr (config load failures, plugin
+    // errors). Surface it alongside stdout so users can act on it.
+    const parts = ['knip: failed to parse JSON output.'];
+    const errTrim = (stderr || '').trim();
+    if (errTrim) parts.push(`stderr: ${errTrim.slice(0, 500)}`);
+    parts.push(`stdout: ${stdout.slice(0, 500)}`);
+    throw new Error(parts.join('\n'));
   }
 }
 
@@ -80,7 +86,7 @@ export default {
       }
       return [];
     }
-    const data = parseKnipJson(stdout);
+    const data = parseKnipJson(stdout, stderr);
     return [
       ...(data.files || []).map(unusedFileFinding),
       ...(data.exports || []).map(unusedExportFinding),
