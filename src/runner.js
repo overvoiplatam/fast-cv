@@ -50,10 +50,14 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
     const fixSkipped = fix && !effectiveFix;
 
     try {
+      const toolFiles = files.length > 0 && Array.isArray(tool.extensions)
+        ? files.filter(f => tool.extensions.some(ext => f.endsWith(ext)))
+        : files;
+
       // Run preFixCommands sequentially if in fix mode and tool supports them
       // preFixCommands are pure formatters — always safe regardless of config source
       if (fix && typeof tool.preFixCommands === 'function') {
-        const preCmds = tool.preFixCommands(targetDir, configPath, { files });
+        const preCmds = tool.preFixCommands(targetDir, configPath, { files: toolFiles });
         for (const cmd of preCmds) {
           await spawnAndCollect(cmd.bin, cmd.args, {
             cwd: cmd.cwd,
@@ -62,7 +66,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
         }
       }
 
-      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files, fix: effectiveFix, licenses, updateDb, exclude });
+      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files: toolFiles, fix: effectiveFix, licenses, updateDb, exclude });
 
       const result = await spawnAndCollect(bin, args, { cwd, timeout });
 

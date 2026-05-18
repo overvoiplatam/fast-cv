@@ -175,6 +175,49 @@ describe('runTools', () => {
     assert.equal(receivedOpts.fix, true);
   });
 
+  // Tool that records what `files` it was invoked with. Used to assert that
+  // the runner-level extension filter is applied before buildCommand sees it.
+  function fileCapturingTool(name, extraOverrides = {}) {
+    const captured = { files: undefined };
+    const tool = makeTool(name, {
+      buildCommand(td, cp, opts) { captured.files = opts.files; return { bin: 'echo', args: ['ok'] }; },
+      parseOutput() { return []; },
+      ...extraOverrides,
+    });
+    return { tool, captured };
+  }
+
+  it('filters files by tool.extensions before invoking buildCommand', async () => {
+    const { tool, captured } = fileCapturingTool('py-only', { extensions: ['.py', '.pyi'] });
+    await runOne(tool, '/tmp', { files: ['a.py', 'b.yml', 'c.pyi', 'd.ts', 'e.md'] });
+    assert.deepEqual(captured.files, ['a.py', 'c.pyi']);
+  });
+
+  it('passes files unchanged when tool has no extensions field', async () => {
+    const { tool, captured } = fileCapturingTool('no-ext');
+    await runOne(tool, '/tmp', { files: ['a.py', 'b.yml'] });
+    assert.deepEqual(captured.files, ['a.py', 'b.yml']);
+  });
+
+  it('passes filtered files (not raw files) to preFixCommands', async () => {
+    let receivedPreFixFiles;
+    await runOne(
+      makeTool('fix-with-ext', {
+        extensions: ['.py'],
+        preFixCommands(td, cp, opts) {
+          receivedPreFixFiles = opts.files;
+          return [{ bin: 'echo', args: ['pre'] }];
+        },
+        buildCommand() { return { bin: 'echo', args: ['main'] }; },
+        parseOutput() { return []; },
+      }),
+      '/tmp',
+      { files: ['a.py', 'b.yml'], fix: true },
+    );
+
+    assert.deepEqual(receivedPreFixFiles, ['a.py']);
+  });
+
   it('passes licenses option to buildCommand', async () => {
     let receivedOpts = {};
     await runOne(
