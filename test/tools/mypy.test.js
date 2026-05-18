@@ -1,14 +1,42 @@
-import { describe, it } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import mypy from '../../src/tools/mypy.js';
 import { testBuildCommandWithFiles } from '../helpers.js';
 
-describe('mypy adapter', () => {
+// Asserts the canonical Finding shape mypy adapters emit. Shared between
+// JSON-mode and text-mode tests since both must produce identical findings.
+function assertFindingShape(f, { file, line, col, rule, severity = 'error' }) {
+  assert.equal(f.file, file);
+  assert.equal(f.line, line);
+  assert.equal(f.col, col);
+  assert.equal(f.tag, 'TYPE_ERROR');
+  assert.equal(f.rule, rule);
+  assert.equal(f.severity, severity);
+}
+
+function assertSingleErrorAtLine(stdout, line) {
+  const findings = mypy.parseOutput(stdout, '', 1);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].line, line);
+  return findings[0];
+}
+
+describe('mypy adapter (metadata)', () => {
   it('has correct metadata', () => {
     assert.equal(mypy.name, 'mypy');
     assert.deepEqual(mypy.extensions, ['.py', '.pyi']);
     assert.ok(mypy.installHint.includes('mypy'));
   });
+
+  it('checkInstalled returns boolean', async () => {
+    const result = await mypy.checkInstalled();
+    assert.equal(typeof result, 'boolean');
+  });
+});
+
+describe('mypy adapter (json mode — mypy >= 1.11)', () => {
+  before(() => mypy._setJsonSupportForTests(true));
+  after(() => mypy._setJsonSupportForTests(false));
 
   it('builds correct command without config', () => {
     const { bin, args } = mypy.buildCommand('/tmp/project', null);
@@ -39,28 +67,17 @@ describe('mypy adapter', () => {
 
     const findings = mypy.parseOutput(stdout, '', 1);
     assert.equal(findings.length, 2);
-
-    assert.equal(findings[0].file, 'src/app.py');
-    assert.equal(findings[0].line, 42);
-    assert.equal(findings[0].col, 5);
-    assert.equal(findings[0].tag, 'TYPE_ERROR');
-    assert.equal(findings[0].rule, 'assignment');
-    assert.equal(findings[0].severity, 'error');
-
+    assertFindingShape(findings[0], { file: 'src/app.py', line: 42, col: 5, rule: 'assignment' });
     assert.equal(findings[1].rule, 'arg-type');
   });
 
   it('filters out non-error severity (notes)', () => {
-    const lines = [
+    const stdout = [
       JSON.stringify({ file: 'src/app.py', line: 42, message: 'Type error', code: 'arg-type', severity: 'error' }),
       JSON.stringify({ file: 'src/app.py', line: 43, message: 'See hint', code: 'arg-type', severity: 'note' }),
       JSON.stringify({ file: 'src/app.py', line: 44, message: 'Some warning', code: 'misc', severity: 'warning' }),
-    ];
-    const stdout = lines.join('\n');
-
-    const findings = mypy.parseOutput(stdout, '', 1);
-    assert.equal(findings.length, 1);
-    assert.equal(findings[0].line, 42);
+    ].join('\n');
+    assertSingleErrorAtLine(stdout, 42);
   });
 
   it('tag is always TYPE_ERROR', () => {
@@ -91,9 +108,61 @@ describe('mypy adapter', () => {
     const findings = mypy.parseOutput(stdout, '', 1);
     assert.equal(findings.length, 1);
   });
+});
 
-  it('checkInstalled returns boolean', async () => {
-    const result = await mypy.checkInstalled();
-    assert.equal(typeof result, 'boolean');
+describe('mypy adapter (text mode — mypy < 1.11)', () => {
+  before(() => mypy._setJsonSupportForTests(false));
+  after(() => mypy._setJsonSupportForTests(false));
+
+  it('buildCommand omits --output/json', () => {
+    const { args } = mypy.buildCommand('/tmp/project', null);
+    assert.ok(!args.includes('--output'));
+    assert.ok(!args.includes('json'));
+    assert.ok(args.includes('--no-error-summary'));
+    assert.ok(args.includes('/tmp/project'));
+  });
+
+  it('parses plain-text error with line and column', () => {
+    const stdout = 'src/app.py:42:5: error: Incompatible types in assignment  [assignment]\n';
+    const findings = mypy.parseOutput(stdout, '', 1);
+    assert.equal(findings.length, 1);
+    assertFindingShape(findings[0], { file: 'src/app.py', line: 42, col: 5, rule: 'assignment' });
+    assert.equal(findings[0].message, 'Incompatible types in assignment');
+  });
+
+  it('parses plain-text error with line only (no column)', () => {
+    const stdout = 'src/app.py:42: error: Some problem  [misc]\n';
+    const findings = mypy.parseOutput(stdout, '', 1);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].line, 42);
+    assert.equal(findings[0].col, undefined);
+    assert.equal(findings[0].rule, 'misc');
+  });
+
+  it('parses error without rule code', () => {
+    const stdout = 'src/app.py:1: error: cannot import\n';
+    const findings = mypy.parseOutput(stdout, '', 1);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].rule, 'type-error');
+    assert.equal(findings[0].message, 'cannot import');
+  });
+
+  it('skips note: lines', () => {
+    const stdout = [
+      'src/app.py:42: error: real error  [misc]',
+      'src/app.py:43: note: See https://docs/foo',
+    ].join('\n');
+    assertSingleErrorAtLine(stdout, 42);
+  });
+
+  it('throws on mypy error in text mode (exit 2)', () => {
+    assert.throws(
+      () => mypy.parseOutput('', 'mypy: error: No module named foo', 2),
+      /mypy error/
+    );
+  });
+
+  it('returns empty for clean output', () => {
+    assert.deepEqual(mypy.parseOutput('', '', 0), []);
   });
 });
