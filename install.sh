@@ -478,43 +478,6 @@ if [[ "${INSTALL_MODE}" == "all" || "${INSTALL_MODE}" == "configs" ]]; then
     fi
   fi
 
-  # Sync Vale styles into BOTH defaults dirs (user defaults + package defaults).
-  # Fast-cv's config resolver may pick either path depending on whether a project has a local config,
-  # so both need populated styles for vale to run without E201 errors.
-  find_vale_bin() {
-    if command -v vale &>/dev/null; then command -v vale; return 0; fi
-    for candidate in "${LOCAL_BIN}/vale" "${HOME}/go/bin/vale" "/opt/homebrew/bin/vale" "/usr/local/bin/vale"; do
-      if [[ -x "${candidate}" ]]; then echo "${candidate}"; return 0; fi
-    done
-    return 1
-  }
-
-  sync_vale_styles() {
-    local dir="$1"
-    local vale_bin="$2"
-    if [[ ! -f "${dir}/.vale.ini" ]]; then return 0; fi
-    if [[ -d "${dir}/vale-styles" ]] && [[ "${OVERWRITE}" == "false" ]]; then
-      ok "Vale styles already synced at ${dir}/vale-styles/"
-      return 0
-    fi
-    info "Syncing Vale styles in ${dir}..."
-    local sync_out
-    if sync_out=$(cd "${dir}" && "${vale_bin}" sync 2>&1); then
-      ok "Vale styles synced to ${dir}/vale-styles/"
-    else
-      warn "Failed to sync Vale styles in ${dir}:"
-      echo "${sync_out}" | head -5 | sed 's/^/    /'
-      warn "Retry manually: cd ${dir} && vale sync"
-    fi
-  }
-
-  if VALE_BIN=$(find_vale_bin); then
-    sync_vale_styles "${CONFIG_DIR}" "${VALE_BIN}"
-    sync_vale_styles "${SCRIPT_DIR}/defaults" "${VALE_BIN}"
-  else
-    warn "vale binary not found on PATH or common locations — skipping style sync"
-    warn "  Install vale, then re-run: ./install.sh --mode configs"
-  fi
 else
   info "Skipping config files (mode: ${INSTALL_MODE})"
 fi
