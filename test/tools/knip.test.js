@@ -115,9 +115,42 @@ describe('knip adapter', () => {
     assert.deepEqual(knip.parseOutput('', '', 0), []);
   });
 
-  it('returns empty when stderr contains Unable to find', () => {
+  it('emits a bootstrap-failure finding when stderr contains Unable to find', () => {
     const findings = knip.parseOutput('', 'Unable to find package.json', 1);
-    assert.deepEqual(findings, []);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].tag, 'LINTER');
+    assert.equal(findings[0].rule, 'bootstrap-failure');
+    assert.equal(findings[0].severity, 'error');
+    assert.ok(findings[0].message.includes('Unable to find package.json'));
+  });
+
+  it('emits a bootstrap-failure finding when stderr contains Error loading <path>', () => {
+    const stderr = "ERROR: Error loading /home/u/proj/vitest.config.js\nReason: Cannot find module 'vitest/config'\nRequire stack:\n- /home/u/proj/vitest.config.js\n";
+    const stdout = 'Module load error? Visit https://knip.dev/reference/known-issues\nConfiguration file load error? Visit https://knip.dev/reference/known-issues\n';
+    const findings = knip.parseOutput(stdout, stderr, 2);
+    assert.equal(findings.length, 1);
+    const f = findings[0];
+    assert.equal(f.file, '/home/u/proj/vitest.config.js');
+    assert.equal(f.tag, 'LINTER');
+    assert.equal(f.rule, 'bootstrap-failure');
+    assert.equal(f.severity, 'error');
+    assert.ok(f.message.includes("Cannot find module 'vitest/config'"));
+  });
+
+  it('emits a bootstrap-failure finding when stderr Error loading + empty stdout', () => {
+    const stderr = "ERROR: Error loading /home/u/proj/knip.config.ts\nReason: Cannot find module 'tsx/esm'\n";
+    const findings = knip.parseOutput('', stderr, 1);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].file, '/home/u/proj/knip.config.ts');
+    assert.equal(findings[0].rule, 'bootstrap-failure');
+  });
+
+  it('still throws when Error loading points inside node_modules/knip/ (knip-internal)', () => {
+    const stderr = "ERROR: Error loading /home/u/proj/node_modules/knip/dist/plugin.js\nReason: Cannot find module 'whatever'\n";
+    assert.throws(
+      () => knip.parseOutput('Module load error?', stderr, 2),
+      /failed to parse JSON/
+    );
   });
 
   it('throws on error with stderr (exit >= 2)', () => {

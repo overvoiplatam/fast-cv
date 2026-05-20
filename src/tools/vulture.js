@@ -3,9 +3,25 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+// Extract `<file>:<line>:` prefix from a trimmed line, scanning up to
+// upperBound. Returns the file, line number, and the offset just past the
+// trailing colon (so callers can slice the remainder). indexOf/slice avoids
+// the `(.+?)` lazy quantifier that trips sonarjs/slow-regex.
+function parseFileLinePrefix(trimmed, upperBound) {
+  const fileEnd = findVultureFileEnd(trimmed, upperBound);
+  if (fileEnd < 0) return null;
+  const lineNumEnd = trimmed.indexOf(':', fileEnd + 1);
+  if (lineNumEnd < 0) return null;
+  const lineStr = trimmed.slice(fileEnd + 1, lineNumEnd);
+  const lineNum = Number.parseInt(lineStr, 10);
+  if (!Number.isFinite(lineNum) || String(lineNum) !== lineStr) return null;
+  const file = trimmed.slice(0, fileEnd);
+  if (file.length === 0) return null;
+  return { file, line: lineNum, bodyStart: lineNumEnd + 1 };
+}
+
 // Manual parse of vulture stdout:
 //   <file>:<line>: <body> (<conf>% confidence)
-// indexOf/slice avoids the `(.+?)` lazy quantifier that trips sonarjs/slow-regex.
 function parseVultureLine(line) {
   const trimmed = line.trimEnd();
   if (trimmed.length === 0) return null;
@@ -22,21 +38,12 @@ function parseVultureLine(line) {
   const conf = Number.parseInt(confStr, 10);
   if (!Number.isFinite(conf) || String(conf) !== confStr) return null;
 
-  // Prefix `<file>:<line>: ` — find the `:<digits>:` pair from the left.
-  const fileEnd = findVultureFileEnd(trimmed, confOpen);
-  if (fileEnd < 0) return null;
-  const lineNumEnd = trimmed.indexOf(':', fileEnd + 1);
-  if (lineNumEnd < 0) return null;
-  const lineStr = trimmed.slice(fileEnd + 1, lineNumEnd);
-  const lineNum = Number.parseInt(lineStr, 10);
-  if (!Number.isFinite(lineNum) || String(lineNum) !== lineStr) return null;
-
-  const file = trimmed.slice(0, fileEnd);
-  if (file.length === 0) return null;
-  const body = trimmed.slice(lineNumEnd + 1, confOpen).trim();
+  const prefix = parseFileLinePrefix(trimmed, confOpen);
+  if (!prefix) return null;
+  const body = trimmed.slice(prefix.bodyStart, confOpen).trim();
   if (body.length === 0) return null;
 
-  return { file, line: lineNum, body, conf };
+  return { file: prefix.file, line: prefix.line, body, conf };
 }
 
 // Find the first `:` followed by digits + `:` — that locates the file/line split.
@@ -61,6 +68,18 @@ function isAsciiDigit(code) {
   return code >= 48 && code <= 57;
 }
 
+// Parse a vulture syntax-error line from stderr:
+//   <file>:<line>: <message>
+function parseVultureErrorLine(line) {
+  const trimmed = line.trimEnd();
+  if (trimmed.length === 0) return null;
+  const prefix = parseFileLinePrefix(trimmed, trimmed.length);
+  if (!prefix) return null;
+  const message = trimmed.slice(prefix.bodyStart).trim();
+  if (message.length === 0) return null;
+  return { file: prefix.file, line: prefix.line, message };
+}
+
 export default {
   name: 'vulture',
   extensions: ['.py', '.pyi'],
@@ -77,14 +96,34 @@ export default {
   },
 
   parseOutput(stdout, stderr, exitCode) {
-    // vulture exits: 0 = clean, 1 = findings, 2+ = error
-    if (exitCode >= 2) {
+    // vulture exits: 0 = clean, 1 = findings, 3 = parser error in target source, 2/>=4 = CLI/usage error.
+    const findings = [];
+
+    if (exitCode === 3) {
+      for (const rawLine of (stderr || '').split('\n')) {
+        const p = parseVultureErrorLine(rawLine);
+        if (!p) continue;
+        findings.push({
+          file: p.file,
+          line: p.line,
+          col: undefined,
+          tag: 'LINTER',
+          rule: 'parse-error',
+          severity: 'error',
+          message: p.message,
+        });
+      }
+      // If we couldn't extract any structured parse errors, fall back to
+      // throwing so genuine misconfig isn't swallowed silently.
+      if (findings.length === 0) {
+        throw new Error(`vulture error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
+      }
+    } else if (exitCode >= 2) {
       throw new Error(`vulture error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
     }
 
-    if (!stdout.trim()) return [];
+    if (!stdout.trim()) return findings;
 
-    const findings = [];
     for (const rawLine of stdout.split('\n')) {
       const p = parseVultureLine(rawLine);
       if (!p) continue;
