@@ -8,21 +8,39 @@ const execFileAsync = promisify(execFile);
 // and "no such file" are knip's missing-config diagnostics. We deliberately
 // avoid matching Node.js `MODULE_NOT_FOUND` strings on their own — those can
 // also indicate a knip-internal regression.
+//
+// Implemented with indexOf/slice (line-by-line) rather than lazy regex like
+// `.+?` — that pattern trips sonarjs/slow-regex.
 function detectKnipBootstrapFailure(stderr) {
   if (!stderr) return null;
-  const loadingMatch = stderr.match(/Error loading (.+?)(?:\r?\n|$)/);
-  if (loadingMatch) {
-    const failingPath = loadingMatch[1].trim();
-    // If the failure points inside knip's own install dir, it's likely a knip
-    // regression rather than a target-project problem — let it bubble up.
-    if (failingPath.includes('node_modules/knip/')) return null;
-    const reasonMatch = stderr.match(/Reason:\s*(.+?)(?:\r?\n|$)/);
-    const reason = reasonMatch ? reasonMatch[1].trim() : stderr.trim().slice(0, 200);
-    return { file: failingPath, reason };
+  const LOAD_PREFIX = 'Error loading ';
+  const REASON_PREFIX = 'Reason:';
+  let failingPath = null;
+  let reason = null;
+  let unableLine = null;
+  for (const rawLine of stderr.split('\n')) {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+    if (failingPath === null) {
+      const idx = line.indexOf(LOAD_PREFIX);
+      if (idx >= 0) {
+        failingPath = line.slice(idx + LOAD_PREFIX.length).trim();
+        continue;
+      }
+    }
+    if (reason === null && line.startsWith(REASON_PREFIX)) {
+      reason = line.slice(REASON_PREFIX.length).trim();
+      continue;
+    }
+    if (unableLine === null && (line.includes('Unable to find') || line.includes('no such file'))) {
+      unableLine = line.trim();
+    }
   }
-  const unableMatch = stderr.match(/(?:Unable to find|no such file)[^\n]*/);
-  if (unableMatch) {
-    return { file: 'knip', reason: unableMatch[0].trim() };
+  if (failingPath !== null) {
+    if (failingPath.includes('node_modules/knip/')) return null;
+    return { file: failingPath, reason: reason || stderr.trim().slice(0, 200) };
+  }
+  if (unableLine !== null) {
+    return { file: 'knip', reason: unableLine };
   }
   return null;
 }

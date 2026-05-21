@@ -57,7 +57,9 @@ function parseMypyTextLine(line) {
   // Trailing `  [code]` (mypy uses two spaces, but tolerate one).
   let message = tail;
   let code = 'type-error';
-  const codeMatch = tail.match(/\s+\[([a-z][a-z0-9-]*)\]\s*$/);
+  // Bounded quantifier keeps sonarjs/slow-regex happy; mypy codes are short
+  // (e.g. "no-untyped-def") so 63 chars is plenty.
+  const codeMatch = tail.match(/[ \t]+\[([a-z][a-z0-9-]{0,63})\][ \t]*$/);
   if (codeMatch) {
     code = codeMatch[1];
     message = tail.slice(0, codeMatch.index);
