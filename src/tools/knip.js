@@ -11,37 +11,42 @@ const execFileAsync = promisify(execFile);
 //
 // Implemented with indexOf/slice (line-by-line) rather than lazy regex like
 // `.+?` — that pattern trips sonarjs/slow-regex.
+const LOAD_PREFIX = 'Error loading ';
+const REASON_PREFIX = 'Reason:';
+
+function stripCR(line) {
+  return line.endsWith('\r') ? line.slice(0, -1) : line;
+}
+
+function extractFailingPath(line) {
+  const idx = line.indexOf(LOAD_PREFIX);
+  return idx >= 0 ? line.slice(idx + LOAD_PREFIX.length).trim() : null;
+}
+
+function extractReason(line) {
+  return line.startsWith(REASON_PREFIX) ? line.slice(REASON_PREFIX.length).trim() : null;
+}
+
+function isUnableLine(line) {
+  return line.includes('Unable to find') || line.includes('no such file');
+}
+
 function detectKnipBootstrapFailure(stderr) {
   if (!stderr) return null;
-  const LOAD_PREFIX = 'Error loading ';
-  const REASON_PREFIX = 'Reason:';
   let failingPath = null;
   let reason = null;
   let unableLine = null;
-  for (const rawLine of stderr.split('\n')) {
-    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
-    if (failingPath === null) {
-      const idx = line.indexOf(LOAD_PREFIX);
-      if (idx >= 0) {
-        failingPath = line.slice(idx + LOAD_PREFIX.length).trim();
-        continue;
-      }
-    }
-    if (reason === null && line.startsWith(REASON_PREFIX)) {
-      reason = line.slice(REASON_PREFIX.length).trim();
-      continue;
-    }
-    if (unableLine === null && (line.includes('Unable to find') || line.includes('no such file'))) {
-      unableLine = line.trim();
-    }
+  for (const raw of stderr.split('\n')) {
+    const line = stripCR(raw);
+    if (failingPath === null) failingPath = extractFailingPath(line);
+    if (reason === null) reason = extractReason(line);
+    if (unableLine === null && isUnableLine(line)) unableLine = line.trim();
   }
   if (failingPath !== null) {
     if (failingPath.includes('node_modules/knip/')) return null;
     return { file: failingPath, reason: reason || stderr.trim().slice(0, 200) };
   }
-  if (unableLine !== null) {
-    return { file: 'knip', reason: unableLine };
-  }
+  if (unableLine !== null) return { file: 'knip', reason: unableLine };
   return null;
 }
 

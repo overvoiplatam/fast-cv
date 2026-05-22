@@ -21,6 +21,46 @@ async function detectJsonSupport() {
   }
 }
 
+// Match trailing "  [code-name]" suffix without a regex — sonarjs/slow-regex
+// flags anchored regexes that combine `+`/`*` on character classes with a
+// bounded quantifier and `$`, even when not actually backtracking-prone. We
+// already use the same indexOf/slice precedent in knip.js (see comment near
+// the top of that file) so the codebase stays consistent.
+//
+// mypy codes are short kebab-case identifiers like `no-untyped-def`; 64 chars
+// is well past the longest one upstream ships.
+function trimTrailingHSpace(s, end) {
+  while (end > 0 && (s[end - 1] === ' ' || s[end - 1] === '\t')) end--;
+  return end;
+}
+
+function isMypyCodeChar(c) {
+  return (c >= 97 && c <= 122) || (c >= 48 && c <= 57) || c === 45;
+}
+
+function isValidMypyCode(code) {
+  if (code.length === 0 || code.length > 64) return false;
+  const first = code.charCodeAt(0);
+  if (first < 97 || first > 122) return false;
+  for (let i = 1; i < code.length; i++) {
+    if (!isMypyCodeChar(code.charCodeAt(i))) return false;
+  }
+  return true;
+}
+
+function extractTrailingCode(tail) {
+  const end = trimTrailingHSpace(tail, tail.length);
+  if (end < 2 || tail[end - 1] !== ']') return null;
+  const close = end - 1;
+  const open = tail.lastIndexOf('[', close - 1);
+  if (open < 1) return null;
+  const prev = tail[open - 1];
+  if (prev !== ' ' && prev !== '\t') return null;
+  const code = tail.slice(open + 1, close);
+  if (!isValidMypyCode(code)) return null;
+  return { code, messageEnd: trimTrailingHSpace(tail, open) };
+}
+
 // Plain-text mypy line: file:line[:col]: severity: message  [code]
 // Last 1 or 2 numeric `:N` segments before the severity are line and optional column.
 // File paths may contain colons (Windows drive letters), so scan from the right.
@@ -57,12 +97,10 @@ function parseMypyTextLine(line) {
   // Trailing `  [code]` (mypy uses two spaces, but tolerate one).
   let message = tail;
   let code = 'type-error';
-  // Bounded quantifier keeps sonarjs/slow-regex happy; mypy codes are short
-  // (e.g. "no-untyped-def") so 63 chars is plenty.
-  const codeMatch = tail.match(/[ \t]+\[([a-z][a-z0-9-]{0,63})\][ \t]*$/);
-  if (codeMatch) {
-    code = codeMatch[1];
-    message = tail.slice(0, codeMatch.index);
+  const extracted = extractTrailingCode(tail);
+  if (extracted) {
+    code = extracted.code;
+    message = tail.slice(0, extracted.messageEnd);
   }
 
   return { file, line: lineNum, col, severity, code, message: message.trim() };
