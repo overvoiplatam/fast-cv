@@ -307,14 +307,14 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
   install_binary_if_missing trivy "https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh"
   if command -v trivy &>/dev/null; then
     info "Updating trivy vulnerability database for cached scans..."
-    if trivy fs --download-db-only --quiet --no-progress "${SCRIPT_DIR}" 2>/dev/null; then
+    if trivy fs --download-db-only --timeout 30m --quiet --no-progress "${SCRIPT_DIR}" 2>/dev/null; then
       ok "trivy vulnerability database ready"
     else
       warn "Failed to download trivy vulnerability database — trivy scans may fail until the DB is cached"
     fi
 
     info "Updating trivy Java database for cached scans..."
-    if trivy fs --download-java-db-only --quiet --no-progress "${SCRIPT_DIR}" 2>/dev/null; then
+    if trivy fs --download-java-db-only --timeout 30m --quiet --no-progress "${SCRIPT_DIR}" 2>/dev/null; then
       ok "trivy Java database ready"
     else
       warn "Failed to download trivy Java database — Java dependency scanning may be reduced until the DB is cached"

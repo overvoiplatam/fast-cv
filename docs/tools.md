@@ -20,6 +20,7 @@ export default {
 
   // Optional
   preFixCommands?(targetDir, configPath, options?): { bin, args, cwd }[],
+  updateDbCommands?(targetDir): { bin, args, cwd? }[],  // run before the scan when --update-db is set (no runner timeout — downloads can be long)
 }
 ```
 
@@ -30,9 +31,8 @@ export default {
 | `files` | `string[]` | ruff, eslint, semgrep, bearer, golangci-lint, mypy, typos, vulture, stylelint, sqlfluff |
 | `fix` | `boolean` | ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff, knip, docspec, spectral, markdownlint |
 | `licenses` | `boolean` | trivy |
-| `updateDb` | `boolean` | trivy |
 
-`checkInstalled()` must verify the same executable that `buildCommand()` runs. Runtime scans should not fetch packages from the network by default; installation and initial database warming belong in `install.sh --mode all` or `--auto-install`. Tools with external databases may honor `options.updateDb` for explicit refresh runs.
+`checkInstalled()` must verify the same executable that `buildCommand()` runs. Runtime scans should not fetch packages from the network by default; installation and initial database warming belong in `install.sh --mode all` or `--auto-install`. Tools with external databases implement `updateDbCommands()` — when `--update-db` is set, the runner executes those commands as a dedicated download step before the (still offline) scan, so a large download never competes with the tool's own scan timeout. If a download command fails, the tool reports an error and its scan is skipped.
 
 ## All Tools (19)
 

@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import trivy from '../../src/tools/trivy.js';
 
 describe('trivy adapter', () => {
+  function assertOfflineFlags(args) {
+    for (const flag of ['--offline-scan', '--skip-db-update', '--skip-java-db-update', '--skip-check-update', '--skip-vex-repo-update']) {
+      assert.ok(args.includes(flag), `missing ${flag}`);
+    }
+  }
+
   it('has correct metadata', () => {
     assert.equal(trivy.name, 'trivy');
     assert.ok(trivy.extensions.includes('.py'));
@@ -26,23 +32,37 @@ describe('trivy adapter', () => {
     assert.ok(args.includes('--format'));
     assert.ok(args.includes('json'));
     assert.ok(args.includes('--quiet'));
-    assert.ok(args.includes('--offline-scan'));
-    assert.ok(args.includes('--skip-db-update'));
-    assert.ok(args.includes('--skip-java-db-update'));
-    assert.ok(args.includes('--skip-check-update'));
-    assert.ok(args.includes('--skip-vex-repo-update'));
+    assertOfflineFlags(args);
     assert.ok(args.includes('/tmp/project'));
     assert.ok(!args.includes('--config'));
   });
 
-  it('builds refresh command when updateDb=true', () => {
+  it('builds offline scan command even when updateDb=true', () => {
     const { args } = trivy.buildCommand('/tmp/project', null, { updateDb: true });
-    assert.ok(!args.includes('--offline-scan'));
-    assert.ok(!args.includes('--skip-db-update'));
-    assert.ok(!args.includes('--skip-java-db-update'));
-    assert.ok(!args.includes('--skip-check-update'));
-    assert.ok(!args.includes('--skip-vex-repo-update'));
+    assertOfflineFlags(args);
     assert.ok(args.includes('/tmp/project'));
+  });
+
+  it('updateDbCommands downloads both DBs with an extended timeout', () => {
+    const cmds = trivy.updateDbCommands('/tmp/project');
+    assert.equal(cmds.length, 2);
+    for (const cmd of cmds) {
+      assert.equal(cmd.bin, 'trivy');
+      assert.ok(cmd.args.includes('--timeout'));
+      assert.ok(cmd.args.includes('30m'));
+      assert.ok(cmd.args.includes('/tmp/project'));
+    }
+    assert.ok(cmds[0].args.includes('--download-db-only'));
+    assert.ok(cmds[1].args.includes('--download-java-db-only'));
+  });
+
+  it('updateDbCommands passes resolved config for db-repository overrides', () => {
+    const cmds = trivy.updateDbCommands('/tmp/project', '/etc/trivy.yaml');
+    for (const cmd of cmds) {
+      assert.ok(cmd.args.includes('--config'));
+      assert.ok(cmd.args.includes('/etc/trivy.yaml'));
+    }
+    assert.ok(!trivy.updateDbCommands('/tmp/project')[0].args.includes('--config'));
   });
 
   it('builds correct command with config', () => {

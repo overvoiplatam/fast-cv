@@ -88,27 +88,36 @@ export default {
   extensions: ['.py', '.js', '.ts', '.go', '.java', '.rb', '.php', '.tf', '.yaml', '.yml', '.rs', '.kt', '.kts', '.cs', '.c', '.cpp', '.swift', '.sql'],
   installHint: 'curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ~/.local/bin',
 
-  buildCommand(targetDir, configPath, { files: _files = [], fix: _fix = false, licenses = false, updateDb = false } = {}) {
+  buildCommand(targetDir, configPath, { files: _files = [], fix: _fix = false, licenses = false } = {}) {
     const scanners = licenses ? 'vuln,misconfig,secret,license' : 'vuln,misconfig,secret';
     const args = [
       'fs',
       '--scanners', scanners,
       '--format', 'json',
       '--quiet',
+      '--offline-scan',
+      '--skip-db-update',
+      '--skip-java-db-update',
+      '--skip-check-update',
+      '--skip-vex-repo-update',
     ];
-    if (!updateDb) {
-      args.push(
-        '--offline-scan',
-        '--skip-db-update',
-        '--skip-java-db-update',
-        '--skip-check-update',
-        '--skip-vex-repo-update',
-      );
-    }
     if (configPath) args.push('--config', configPath);
     // trivy scans the full directory (ignores files arg — same pattern as jscpd)
     args.push(targetDir);
     return { bin: 'trivy', args };
+  },
+
+  // The DB artifact is hundreds of MB; trivy's default 5m timeout covers the
+  // whole run, so downloads must happen in a dedicated step with a wider budget.
+  // configPath lets a resolved trivy.yaml override db-repository for networks
+  // where the default registry stalls.
+  updateDbCommands(targetDir, configPath) {
+    const base = ['--timeout', '30m', '--quiet'];
+    if (configPath) base.push('--config', configPath);
+    return [
+      { bin: 'trivy', args: ['fs', '--download-db-only', ...base, targetDir] },
+      { bin: 'trivy', args: ['fs', '--download-java-db-only', ...base, targetDir] },
+    ];
   },
 
   parseOutput(stdout, stderr, exitCode) {

@@ -41,7 +41,20 @@ function spawnAndCollect(bin, args, opts) {
   });
 }
 
-function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false, licenses = false, updateDb = false, configSource = 'none', exclude = [] } = {}) {
+// Dedicated DB download step: runs with timeout 0 so a large download never
+// competes with the tool's own scan budget (the user's -t is per-scan).
+// Returns an error detail string on failure, null on success.
+async function runDbUpdate(tool, targetDir, configPath, verbose) {
+  if (verbose) process.stderr.write(`  Updating ${tool.name} databases...\n`);
+  for (const cmd of tool.updateDbCommands(targetDir, configPath)) {
+    const result = await spawnAndCollect(cmd.bin, cmd.args, { cwd: cmd.cwd, timeout: 0 });
+    if (result.spawnError) return result.spawnError.message;
+    if (result.exitCode !== 0) return result.stderr.slice(0, 500) || `exit code ${result.exitCode}`;
+  }
+  return null;
+}
+
+function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false, licenses = false, updateDb = false, verbose = false, configSource = 'none', exclude = [] } = {}) {
   return new Promise(async (resolve) => {
     const start = Date.now();
 
@@ -66,7 +79,21 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
         }
       }
 
-      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files: toolFiles, fix: effectiveFix, licenses, updateDb, exclude });
+      if (updateDb && typeof tool.updateDbCommands === 'function') {
+        const dbError = await runDbUpdate(tool, targetDir, configPath, verbose);
+        if (dbError) {
+          resolve({
+            tool: tool.name,
+            findings: [],
+            error: `${tool.name} DB update failed: ${dbError}`,
+            duration: Date.now() - start,
+            fixSkipped,
+          });
+          return;
+        }
+      }
+
+      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files: toolFiles, fix: effectiveFix, licenses, exclude });
 
       const result = await spawnAndCollect(bin, args, { cwd, timeout });
 
@@ -138,7 +165,7 @@ export async function runTools(toolConfigs, targetDir, options = {}) {
   for (const { tool, config } of toolConfigs) {
     if (verbose) process.stderr.write(`  Running ${tool.name}...\n`);
 
-    const result = await runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses, updateDb, configSource: config.source, exclude });
+    const result = await runSingleTool(tool, config.path, targetDir, timeout, { files, fix, licenses, updateDb, verbose, configSource: config.source, exclude });
 
     if (verbose) {
       const status = result.error

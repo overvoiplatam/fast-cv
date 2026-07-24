@@ -23,7 +23,7 @@ Implementation: `src/config-resolver.js`
 | bearer | `.bearer.yml`, `bearer.yml` | — |
 | golangci-lint | `.golangci.yml`, `.golangci.yaml`, `.golangci.toml`, `.golangci.json` | `defaults/.golangci.yml` |
 | jscpd | `.jscpd.json` | — |
-| trivy | `trivy.yaml`, `.trivy.yaml` | — |
+| trivy | `trivy.yaml`, `.trivy.yaml` | — (user default honored: `~/.config/fast-cv/defaults/trivy.yaml`, e.g. to reorder `db.repository` registries on networks where `mirror.gcr.io` stalls) |
 | mypy | `mypy.ini`, `.mypy.ini`, `setup.cfg`, `pyproject.toml` | `defaults/mypy.ini` |
 | typos | `typos.toml`, `.typos.toml`, `_typos.toml` | — |
 | vulture | — (reads `pyproject.toml [tool.vulture]` natively) | — |
@@ -164,7 +164,7 @@ All patterns use gitignore syntax via the `ignore` npm package.
 | `--only <patterns>` | — | Scan only matching files/globs |
 | `--fix` | `false` | Run only fix-capable tools, apply fixes, and exit (no findings report; see Fix Safety below) |
 | `--licenses` | `false` | Include license compliance scanning (trivy) |
-| `--update-db` | `false` | Refresh external scanner databases before scanning (currently trivy) |
+| `--update-db` | `false` | Download external scanner databases as a dedicated pre-step (30m budget) before the offline scan (currently trivy) |
 | `--sbom` | `false` | Generate CycloneDX SBOM (trivy, early exit) |
 | `--max-lines <number>` | `600` | Flag files exceeding this line count (0 to disable) |
 | `--max-lines-omit <patterns>` | — | Comma-separated patterns to exclude from line count check |

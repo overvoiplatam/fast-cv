@@ -43,7 +43,11 @@ const TOOL_CONFIG_FILES = new Map([
 ]);
 
 // Tool name → default config filename shipped with fast-cv.
+// trivy has no shipped default — its entry only enables the user-default
+// lookup (~/.config/fast-cv/defaults/trivy.yaml), e.g. to override
+// db-repository on networks where the default registry stalls.
 const PACKAGE_DEFAULT_FILES = new Map([
+  ['trivy', 'trivy.yaml'],
   ['ruff', 'ruff.toml'],
   ['eslint', 'eslint.config.mjs'],
   ['semgrep', 'semgrep'],  // directory — semgrep reads all YAML files inside

@@ -73,7 +73,7 @@ fast-cv implements a five-pillar security model that provides bank-grade coverag
 ### Offline-first design
 
 - **Semgrep OWASP rules**: The full [OWASP Top 10](https://semgrep.dev/p/owasp-top-ten) ruleset (~543 rules) is downloaded once during `./install.sh` and stored at `~/.config/fast-cv/defaults/semgrep/owasp-top-ten.yaml`. After install, all SAST scanning is fully offline. Custom taint rules (`taint.yaml`) are shipped alongside.
-- **Trivy databases**: `install.sh --mode all` installs Trivy and refreshes the vulnerability and Java databases up front, so the first default scan uses a current cached baseline. Runtime scans use cached/offline mode by default for repeatability; run `fast-cv --update-db .` when a validation job should refresh Trivy databases before scanning.
+- **Trivy databases**: `install.sh --mode all` installs Trivy and refreshes the vulnerability and Java databases up front, so the first default scan uses a current cached baseline. Runtime scans always use cached/offline mode for repeatability; run `fast-cv --update-db .` when a validation job should refresh Trivy databases — the download runs as a dedicated pre-step with a 30-minute budget (the DB artifact is hundreds of MB), then the scan proceeds offline as usual.
 
 ## Install
 
@@ -150,7 +150,7 @@ fast-cv [directory] [options]
 | `--only <patterns>` | Comma-separated file paths or glob patterns to scan exclusively | none |
 | `--fix` | Auto-fix formatting/style issues where supported | `false` |
 | `--licenses` | Include open-source license compliance scanning (trivy) | `false` |
-| `--update-db` | Refresh external scanner databases before scanning (currently trivy) | `false` |
+| `--update-db` | Download external scanner databases as a dedicated pre-step before the offline scan (currently trivy) | `false` |
 | `--sbom` | Generate CycloneDX SBOM inventory to stdout (requires trivy) | `false` |
 | `--max-lines <number>` | Flag files exceeding this line count (0 to disable) | `600` |
 | `--max-lines-omit <patterns>` | Comma-separated patterns to exclude from line count check (gitignore syntax) | none |

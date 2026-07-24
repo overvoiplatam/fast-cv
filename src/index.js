@@ -291,8 +291,18 @@ async function runSbomFlow(targetDir, options) {
     process.stderr.write(`Error: trivy is required for SBOM generation. ${trivyTool?.installHint || ''}\n`);
     process.exit(EXIT_PRECHECK_FAILED);
   }
-  const { stdout, stderr } = await spawnSbom(targetDir, options.updateDb);
-  if (!stdout.trim()) {
+  if (options.updateDb) {
+    const config = await resolveConfig('trivy', targetDir);
+    for (const cmd of trivyTool.updateDbCommands(targetDir, config.path)) {
+      const { stderr, exitCode } = await spawnTrivy(cmd.args);
+      if (exitCode !== 0) {
+        process.stderr.write(`trivy DB update failed: ${stderr.slice(0, 500) || `exit code ${exitCode}`}\n`);
+        process.exit(EXIT_PRECHECK_FAILED);
+      }
+    }
+  }
+  const { stdout, stderr, exitCode } = await spawnSbom(targetDir);
+  if (!stdout.trim() || exitCode !== 0) {
     const advice = needsDbUpdateAdvice(stderr)
       ? ' Run fast-cv with --update-db --sbom . to refresh the trivy databases before generating the SBOM.'
       : '';
@@ -303,25 +313,31 @@ async function runSbomFlow(targetDir, options) {
   process.exit(EXIT_CLEAN);
 }
 
-async function spawnSbom(targetDir, updateDb) {
+function spawnSbom(targetDir) {
+  return spawnTrivy([
+    'fs',
+    '--format', 'cyclonedx',
+    '--quiet',
+    '--offline-scan',
+    '--skip-db-update',
+    '--skip-java-db-update',
+    '--skip-check-update',
+    '--skip-vex-repo-update',
+    targetDir,
+  ]);
+}
+
+async function spawnTrivy(args) {
   const { spawn: spawnProc } = await import('node:child_process');
-  const args = ['fs', '--format', 'cyclonedx', '--quiet'];
-  if (!updateDb) {
-    args.push(
-      '--offline-scan',
-      '--skip-db-update',
-      '--skip-java-db-update',
-      '--skip-check-update',
-      '--skip-vex-repo-update',
-    );
-  }
-  args.push(targetDir);
   const proc = spawnProc('trivy', args, { stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '', stderr = '';
   proc.stdout.on('data', c => { stdout += c; });
   proc.stderr.on('data', c => { stderr += c; });
-  await new Promise(r => proc.on('close', r));
-  return { stdout, stderr };
+  const exitCode = await new Promise((r) => {
+    proc.on('close', r);
+    proc.on('error', (err) => { stderr += err.message; r(-1); });
+  });
+  return { stdout, stderr, exitCode };
 }
 
 function needsDbUpdateAdvice(stderr) {

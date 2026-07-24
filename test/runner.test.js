@@ -235,12 +235,16 @@ describe('runTools', () => {
     assert.equal(receivedOpts.licenses, true);
   });
 
-  it('passes updateDb option to buildCommand', async () => {
-    let receivedOpts = {};
-    await runOne(
+  it('runs updateDbCommands before main command when updateDb=true', async () => {
+    const callOrder = [];
+    const results = await runOne(
       makeTool('update-db-tool', {
-        buildCommand(targetDir, configPath, opts) {
-          receivedOpts = opts;
+        updateDbCommands() {
+          callOrder.push('db-update');
+          return [{ bin: 'true', args: [] }];
+        },
+        buildCommand() {
+          callOrder.push('main');
           return { bin: 'echo', args: ['ok'] };
         },
         parseOutput() { return []; },
@@ -249,7 +253,65 @@ describe('runTools', () => {
       { updateDb: true },
     );
 
-    assert.equal(receivedOpts.updateDb, true);
+    assert.equal(results[0].error, null);
+    assert.deepEqual(callOrder, ['db-update', 'main']);
+  });
+
+  it('skips updateDbCommands when updateDb is false', async () => {
+    let dbUpdateCalled = false;
+    await runOne(
+      makeTool('no-update-tool', {
+        updateDbCommands() {
+          dbUpdateCalled = true;
+          return [{ bin: 'true', args: [] }];
+        },
+        buildCommand() { return { bin: 'echo', args: ['ok'] }; },
+        parseOutput() { return []; },
+      }),
+      '/tmp',
+      { updateDb: false },
+    );
+
+    assert.equal(dbUpdateCalled, false);
+  });
+
+  it('reports error and skips scan when a DB update command fails', async () => {
+    let mainRan = false;
+    const results = await runOne(
+      makeTool('failing-db-tool', {
+        updateDbCommands() {
+          return [{ bin: 'sh', args: ['-c', 'echo "download failed" >&2; exit 1'] }];
+        },
+        buildCommand() {
+          mainRan = true;
+          return { bin: 'echo', args: ['ok'] };
+        },
+        parseOutput() { return []; },
+      }),
+      '/tmp',
+      { updateDb: true },
+    );
+
+    assert.equal(mainRan, false);
+    assert.ok(results[0].error.includes('failing-db-tool DB update failed'));
+    assert.ok(results[0].error.includes('download failed'));
+  });
+
+  it('reports DB update failure even when the command emits no stderr', async () => {
+    const results = await runOne(
+      makeTool('silent-db-tool', {
+        updateDbCommands() {
+          return [{ bin: 'sh', args: ['-c', 'exit 3'] }];
+        },
+        buildCommand() { return { bin: 'echo', args: ['ok'] }; },
+        parseOutput() { return []; },
+      }),
+      '/tmp',
+      { updateDb: true },
+    );
+
+    assert.ok(results[0].error.includes('silent-db-tool DB update failed'));
+    assert.ok(results[0].error.includes('exit code 3'));
   });
 
   it('runs preFixCommands before main command in fix mode', async () => {
