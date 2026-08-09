@@ -220,6 +220,97 @@ describe('pruneDirectory', () => {
   });
 });
 
+describe('pruneDirectory: virtualenv exclusion', () => {
+  let tmpDir;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'fcv-venv-'));
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('ignores a venv whose directory name is not a bare .venv', async () => {
+    const sitePkgs = join(tmpDir, '.venv-freqtrade', 'lib', 'python3.12', 'site-packages');
+    await mkdir(sitePkgs, { recursive: true });
+    await writeFile(join(sitePkgs, 'typing_extensions.py'), 'x = 1');
+    await writeFile(join(tmpDir, 'app.py'), 'print(1)');
+
+    const { files } = await pruneDirectory(tmpDir);
+
+    assert.ok(files.includes('app.py'));
+    assert.ok(!files.some(f => f.startsWith('.venv-freqtrade')), 'venv contents excluded');
+  });
+
+  it('ignores site-packages regardless of the enclosing directory name', async () => {
+    const sitePkgs = join(tmpDir, 'toolchain', 'lib', 'python3.12', 'site-packages');
+    await mkdir(sitePkgs, { recursive: true });
+    await writeFile(join(sitePkgs, 'numpy.py'), 'x = 1');
+
+    const { files } = await pruneDirectory(tmpDir);
+
+    assert.ok(!files.some(f => f.includes('site-packages')));
+  });
+
+  it('ignores a pyvenv.cfg-marked directory with an arbitrary name', async () => {
+    const envDir = join(tmpDir, 'env-3.12');
+    await mkdir(join(envDir, 'src'), { recursive: true });
+    await writeFile(join(envDir, 'pyvenv.cfg'), 'home = /usr/bin\n');
+    await writeFile(join(envDir, 'src', 'vendored.py'), 'x = 1');
+
+    const { files } = await pruneDirectory(tmpDir);
+
+    assert.ok(!files.some(f => f.startsWith('env-3.12')), 'pyvenv.cfg marks the tree as a venv');
+  });
+
+  it('does not exclude project files whose names merely start with venv', async () => {
+    await mkdir(join(tmpDir, 'src'), { recursive: true });
+    await writeFile(join(tmpDir, 'src', 'venv_utils.py'), 'x = 1');
+
+    const { files } = await pruneDirectory(tmpDir);
+
+    assert.ok(files.includes(join('src', 'venv_utils.py')));
+  });
+});
+
+describe('pruneDirectory: dominant directory warning', () => {
+  let tmpDir;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'fcv-dominant-'));
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('warns when one subtree supplies most of the scanned files', async () => {
+    await mkdir(join(tmpDir, 'generated'), { recursive: true });
+    for (let i = 0; i < 250; i++) {
+      await writeFile(join(tmpDir, 'generated', `gen${i}.py`), 'x = 1');
+    }
+    await writeFile(join(tmpDir, 'app.py'), 'x = 1');
+
+    const { warnings } = await pruneDirectory(tmpDir);
+
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /`generated\/` accounts for 250 of 251 scanned files/);
+    assert.match(warnings[0], /\.fcvignore/);
+  });
+
+  it('stays silent on small scans', async () => {
+    const small = await mkdtemp(join(tmpdir(), 'fcv-small-'));
+    await mkdir(join(small, 'src'), { recursive: true });
+    await writeFile(join(small, 'src', 'a.py'), 'x = 1');
+
+    const { warnings } = await pruneDirectory(small);
+
+    assert.deepEqual(warnings, []);
+    await rm(small, { recursive: true, force: true });
+  });
+});
+
 describe('createIgnoreFilter', () => {
   let tmpDir;
 

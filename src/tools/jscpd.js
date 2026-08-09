@@ -4,7 +4,44 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SCANNABLE_EXTENSIONS } from '../constants.js';
-import { HARDCODED_IGNORES } from '../pruner.js';
+import { HARDCODED_IGNORES, parseIgnorePatterns } from '../pruner.js';
+
+const PROJECT_IGNORE_FILES = ['.gitignore', '.fcvignore'];
+
+/** Reads .gitignore/.fcvignore and converts them to jscpd-style globs. */
+function readProjectIgnorePatterns(targetDir) {
+  const globs = [];
+  for (const name of PROJECT_IGNORE_FILES) {
+    let content;
+    try {
+      content = readFileSync(join(targetDir, name), 'utf-8');
+    } catch {
+      continue;
+    }
+    for (const pattern of parseIgnorePatterns(content)) globs.push(...gitignoreToGlobs(pattern));
+  }
+  return globs;
+}
+
+// jscpd's `ignore` takes plain globs, not gitignore syntax, so anchoring and
+// directory semantics have to be spelled out. Negations are dropped: jscpd has
+// no way to express them, and over-ignoring is safer than crashing the config.
+function gitignoreToGlobs(pattern) {
+  if (pattern.startsWith('!')) return [];
+
+  const anchored = pattern.startsWith('/');
+  let body = anchored ? pattern.slice(1) : pattern;
+  const dirOnly = body.endsWith('/');
+  if (dirOnly) body = body.slice(0, -1);
+  if (!body) return [];
+
+  // A pattern containing a slash is relative to the ignore file; otherwise it
+  // matches at any depth.
+  const prefix = anchored || body.includes('/') ? '' : '**/';
+  if (dirOnly) return [`${prefix}${body}/**`];
+  // Bare names match both a file and a directory's contents.
+  return [`${prefix}${body}`, `${prefix}${body}/**`];
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -47,9 +84,21 @@ function cleanupOutDir(outDir) {
   try { rmSync(outDir, { recursive: true, force: true }); } catch { /* noop */ }
 }
 
+// A block reported against its own position isn't duplication. jscpd 5 emits
+// these self-matches; jscpd 4 does not.
+function isSelfMatch(first, second) {
+  if (!first.name || first.name !== second.name) return false;
+  const firstStart = first.start ?? 0;
+  const firstEnd = first.end ?? firstStart;
+  const secondStart = second.start ?? 0;
+  const secondEnd = second.end ?? secondStart;
+  return firstStart <= secondEnd && secondStart <= firstEnd;
+}
+
 function makeDuplicatePair(dup) {
   const first = dup.firstFile || {};
   const second = dup.secondFile || {};
+  if (isSelfMatch(first, second)) return [];
   const lines = dup.lines || 0;
   const tokens = dup.tokens || 0;
   const format = dup.format || 'unknown';
@@ -59,18 +108,27 @@ function makeDuplicatePair(dup) {
   ];
 }
 
+// jscpd 5 (the Rust rewrite) suffixes report paths with the detected format —
+// "CLAUDE.md:markdown" — while jscpd 4 emits a bare path. Strip it so findings
+// carry a real path that survives the post-filter and SARIF location mapping.
+function stripFormatSuffix(name, format) {
+  if (!name || !format) return name;
+  const suffix = `:${format}`;
+  return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name;
+}
+
 function duplicateFinding(selfFile, pairFile, lines, tokens, format) {
   const pairLine = pairFile.startLoc?.line || pairFile.start || '?';
-  const pairName = pairFile.name || 'unknown';
+  const pairName = stripFormatSuffix(pairFile.name, format) || 'unknown';
   return {
-    file: selfFile.name || 'unknown',
+    file: stripFormatSuffix(selfFile.name, format) || 'unknown',
     line: selfFile.startLoc?.line || selfFile.start || 0,
     col: selfFile.startLoc?.column || undefined,
     tag: 'DUPLICATION',
     rule: `jscpd/${format}`,
     severity: 'warning',
     message: `Duplicated block (${lines} lines, ${tokens} tokens) — also in ${pairName}:${pairLine}`,
-    otherFile: pairFile.name || undefined,
+    otherFile: stripFormatSuffix(pairFile.name, format) || undefined,
   };
 }
 
@@ -87,6 +145,10 @@ export default {
     // only accepts a single pattern; config file handles arrays properly)
     if (!configPath) {
       const ignorePatterns = HARDCODED_IGNORES.map(d => `**/${d}/**`);
+      // jscpd walks the tree itself rather than taking our pruned file list, so
+      // the project's own ignore files have to be handed to it explicitly. This
+      // replaces the `--gitignore` flag, which jscpd 5 (the Rust rewrite) dropped.
+      for (const pattern of readProjectIgnorePatterns(targetDir)) ignorePatterns.push(pattern);
       for (const pattern of exclude) ignorePatterns.push(pattern);
       const tmpConfig = join(outDir, '.jscpd.json');
       writeFileSync(tmpConfig, JSON.stringify({
@@ -101,7 +163,6 @@ export default {
       '--reporters', 'json',
       '--output', outDir,
       '--silent',
-      '--gitignore',
       '--config', configPath,
     ];
 

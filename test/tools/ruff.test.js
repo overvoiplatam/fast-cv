@@ -36,7 +36,9 @@ describe('ruff adapter', () => {
   });
 
   it('builds command with files list', () => {
-    testBuildCommandWithFiles(ruff);
+    const { args } = testBuildCommandWithFiles(ruff);
+    assert.ok(args.includes('src/a.py'));
+    assert.ok(!args.includes('/tmp/project'));
   });
 
   it('returns preFixCommands for ruff format', () => {

@@ -39,8 +39,9 @@ export async function precheck(tools, options = {}) {
   }
 
   if (ready.length > 0) {
-    for (const { tool } of missing) {
-      warnings.push(`${tool.name} not found — skipped (install: ${tool.installHint})`);
+    for (const { tool, reason } of missing) {
+      const problem = reason || 'not found';
+      warnings.push(`${tool.name} ${problem} — skipped (install: ${tool.installHint})`);
     }
     return { ok: true, tools: ready, warnings };
   }
@@ -48,20 +49,30 @@ export async function precheck(tools, options = {}) {
   return { ok: false, tools: ready, warnings, message: buildMissingMessage(missing) };
 }
 
+// checkInstalled() may return a boolean, or `{ ok: false, reason }` when the
+// tool is present but unusable — an unsupported version, say. The reason
+// replaces the default "not found", which would otherwise be misleading.
+function normalizeCheck(result) {
+  if (result && typeof result === 'object') {
+    return { installed: Boolean(result.ok), reason: result.reason || null };
+  }
+  return { installed: result === true, reason: null };
+}
+
 async function partitionByInstalled(tools) {
   const ready = [];
   const missing = [];
   const checks = await Promise.allSettled(tools.map(async (tool) => {
     try {
-      return { tool, installed: await tool.checkInstalled() };
+      return { tool, ...normalizeCheck(await tool.checkInstalled()) };
     } catch {
-      return { tool, installed: false };
+      return { tool, installed: false, reason: null };
     }
   }));
   for (const result of checks) {
-    const { tool, installed } = result.value;
+    const { tool, installed, reason } = result.value;
     if (installed) ready.push(tool);
-    else missing.push({ tool });
+    else missing.push({ tool, reason });
   }
   return { ready, missing };
 }
@@ -80,8 +91,9 @@ async function runAutoInstall(missing, ready, warnings, verbose) {
 
 function buildMissingMessage(missing) {
   const lines = ['[PRECHECK FAILED] No tools available — all applicable tools are missing:\n', ''];
-  for (const { tool } of missing) {
-    lines.push(`  ${tool.name} (needed for ${tool.extensions.join(', ')} files)`);
+  for (const { tool, reason } of missing) {
+    const detail = reason ? ` — ${reason}` : '';
+    lines.push(`  ${tool.name} (needed for ${tool.extensions.join(', ')} files)${detail}`);
     lines.push(`    Install: ${tool.installHint}`);
     lines.push('');
   }

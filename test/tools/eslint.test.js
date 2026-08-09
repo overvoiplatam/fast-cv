@@ -18,7 +18,9 @@ describe('eslint adapter', () => {
   });
 
   it('builds command without config', () => {
-    testBuildCommandNoConfig(eslint, 'eslint');
+    const { bin, args } = testBuildCommandNoConfig(eslint, 'eslint');
+    assert.equal(bin, 'eslint');
+    assert.ok(args.includes('/tmp/project'));
   });
 
   it('builds command with config', () => {

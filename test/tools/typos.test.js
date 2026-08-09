@@ -22,7 +22,9 @@ describe('typos adapter', () => {
   });
 
   it('builds correct command without config', () => {
-    testBuildCommandNoConfig(typos, 'typos');
+    const { bin, args } = testBuildCommandNoConfig(typos, 'typos');
+    assert.equal(bin, 'typos');
+    assert.ok(args.includes('/tmp/project'));
   });
 
   it('builds correct command with config', () => {

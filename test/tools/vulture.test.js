@@ -23,7 +23,9 @@ describe('vulture adapter', () => {
   });
 
   it('builds command with files list', () => {
-    testBuildCommandWithFiles(vulture);
+    const { args } = testBuildCommandWithFiles(vulture);
+    assert.ok(args.includes('src/a.py'));
+    assert.ok(!args.includes('/tmp/project'));
   });
 
   it('parses standard vulture output', () => {

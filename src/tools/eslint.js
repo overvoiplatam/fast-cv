@@ -3,6 +3,9 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+// eslint 9 is the first release that reads flat config by default.
+const MIN_ESLINT_MAJOR = 9;
+
 const SECURITY_RULES = new Set([
   'no-eval', 'no-implied-eval', 'no-new-func',
   'no-script-url', 'no-proto', 'no-caller', 'no-extend-native',
@@ -137,11 +140,22 @@ export default {
   },
 
   async checkInstalled() {
+    let stdout;
     try {
-      await execFileAsync('eslint', ['--version']);
-      return true;
+      ({ stdout } = await execFileAsync('eslint', ['--version']));
     } catch {
       return false;
     }
+    // Our shipped default is a flat config (eslint.config.mjs), which only
+    // eslint 9+ reads by default. Older versions try to parse it as YAML and
+    // die with a js-yaml stack trace — report the real cause instead.
+    const major = Number(/^v?(\d+)\./.exec(stdout.trim())?.[1]);
+    if (Number.isInteger(major) && major < MIN_ESLINT_MAJOR) {
+      return {
+        ok: false,
+        reason: `found v${stdout.trim().replace(/^v/, '')}, but flat config needs eslint >= ${MIN_ESLINT_MAJOR}`,
+      };
+    }
+    return true;
   },
 };

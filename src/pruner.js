@@ -14,15 +14,26 @@ export const HARDCODED_IGNORES = [
   '.yarn',
   '.pnp',
 
-  // Python
+  // Python — globs, because virtualenvs are routinely named `.venv-<project>`
+  // or `venv3`. `site-packages`/`dist-packages` are the name-independent catch:
+  // they match installed dependencies inside a venv, a conda env, or a system
+  // interpreter, whatever the enclosing directory is called.
   '__pycache__',
-  '.venv',
-  'venv',
+  '.venv*',
+  'venv*',
+  'site-packages',
+  'dist-packages',
   '.tox',
+  '.nox',
+  '.eggs',
   '.mypy_cache',
   '.pytest_cache',
   '.ruff_cache',
   '.egg-info',
+  '*.egg-info',
+  '.conda',
+  '.direnv',
+  '.ipynb_checkpoints',
 
   // Version control
   '.git',
@@ -63,6 +74,7 @@ export const HARDCODED_IGNORES = [
   // Build tools / caches
   '.gradle',
   '.cargo',
+  'Pods',
   '.sass-cache',
   '.cache',
   '.output',
@@ -85,10 +97,14 @@ const IGNORED_FILES = [
 
 const SCANNABLE_SET = new Set(SCANNABLE_EXTENSIONS);
 
+/** Strips blanks and comments from .gitignore-style file contents. */
+export function parseIgnorePatterns(content) {
+  return content.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+}
+
 async function loadIgnoreFile(filePath) {
   try {
-    const content = await readFile(filePath, 'utf-8');
-    return content.split('\n').filter(line => line.trim() && !line.startsWith('#'));
+    return parseIgnorePatterns(await readFile(filePath, 'utf-8'));
   } catch {
     return [];
   }
@@ -148,6 +164,12 @@ export async function pruneDirectory(targetDir, { exclude = [], only = [], gitFi
   const gitFileSet = gitFiles ? new Set(gitFiles) : null;
 
   const entries = await readdir(targetDir, { recursive: true, withFileTypes: true });
+
+  // Drop virtualenvs before filtering, so a venv with an unexpected name
+  // (`.venv-freqtrade`, `env-3.12`) can't slip past the name-based patterns.
+  const venvDirs = findVirtualenvDirs(entries, targetDir);
+  if (venvDirs.length > 0) ignoreFilter.add(venvDirs);
+
   const files = [];
   const languages = new Set();
 
@@ -159,7 +181,49 @@ export async function pruneDirectory(targetDir, { exclude = [], only = [], gitFi
   }
 
   files.sort();
-  return { files, languages, ignoreFilter, onlyFilter };
+  return { files, languages, ignoreFilter, onlyFilter, warnings: dominantDirWarnings(files) };
+}
+
+// PEP 405 marks every virtualenv root with a `pyvenv.cfg`. Nothing under one is
+// project source, so the whole subtree is ignored regardless of its name. A
+// marker at the scan root itself is skipped — that means the user deliberately
+// pointed fast-cv at a venv, and ignoring everything would be unhelpful.
+function findVirtualenvDirs(entries, targetDir) {
+  const dirs = [];
+  for (const entry of entries) {
+    if (entry.name !== 'pyvenv.cfg' || !entry.isFile()) continue;
+    const relDir = relative(targetDir, entry.parentPath || entry.path);
+    if (relDir && !relDir.startsWith('..')) dirs.push(`${relDir}/`);
+  }
+  return dirs;
+}
+
+const DOMINANT_DIR_SHARE = 0.5;
+const DOMINANT_DIR_MIN_FILES = 200;
+
+// A single subtree supplying most of the scan is almost always vendored code
+// that escaped the ignore rules. Say so, with the path to add to .fcvignore —
+// a silently huge report is the failure mode we're guarding against.
+function dominantDirWarnings(files) {
+  if (files.length < DOMINANT_DIR_MIN_FILES) return [];
+
+  const counts = new Map();
+  for (const file of files) {
+    const slash = file.indexOf('/');
+    if (slash < 1) continue;
+    const top = file.slice(0, slash);
+    counts.set(top, (counts.get(top) || 0) + 1);
+  }
+
+  const warnings = [];
+  for (const [dir, count] of counts) {
+    if (count / files.length < DOMINANT_DIR_SHARE) continue;
+    warnings.push(
+      `\`${dir}/\` accounts for ${count} of ${files.length} scanned files. `
+      + `If it is vendored or generated code, add it to .fcvignore or pass --exclude '${dir}/**'.`,
+    );
+  }
+  return warnings;
 }
 
 function acceptEntry(entry, targetDir, ignoreFilter, onlyFilter, gitFileSet) {

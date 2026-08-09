@@ -30,6 +30,44 @@ describe('precheck', () => {
     assert.ok(result.warnings.some(w => w.includes('npm install b')));
   });
 
+  // Present but unusable: checkInstalled reports why instead of just `false`.
+  const UNUSABLE_REASON = 'found v6.4.0, but flat config needs eslint >= 9';
+  const unusableEslint = () => ({
+    name: 'eslint',
+    extensions: ['.js'],
+    installHint: 'npm install -g eslint',
+    checkInstalled: async () => ({ ok: false, reason: UNUSABLE_REASON }),
+  });
+
+  it('surfaces the reason when a tool is present but unusable', async () => {
+    const tools = [
+      { name: 'tool-a', extensions: ['.py'], installHint: 'pip install a', checkInstalled: async () => true },
+      unusableEslint(),
+    ];
+
+    const result = await precheck(tools);
+    assert.equal(result.tools.length, 1);
+    const warning = result.warnings.find(w => w.includes('eslint'));
+    assert.ok(warning.includes('found v6.4.0'));
+    assert.ok(!warning.includes('not found'), 'the misleading default is replaced');
+  });
+
+  it('treats { ok: true } as installed', async () => {
+    const tools = [
+      { name: 'tool-a', extensions: ['.py'], installHint: 'pip install a', checkInstalled: async () => ({ ok: true }) },
+    ];
+
+    const result = await precheck(tools);
+    assert.equal(result.ok, true);
+    assert.equal(result.tools.length, 1);
+  });
+
+  it('includes the unusable reason in the all-missing failure message', async () => {
+    const result = await precheck([unusableEslint()]);
+    assert.equal(result.ok, false);
+    assert.ok(result.message.includes('found v6.4.0'));
+  });
+
   it('includes extension info in failure message', async () => {
     const tools = [
       { name: 'ruff', extensions: ['.py', '.pyi'], installHint: 'pip3 install ruff', checkInstalled: async () => false },

@@ -54,6 +54,15 @@ async function runDbUpdate(tool, targetDir, configPath, verbose) {
   return null;
 }
 
+// preFixCommands are pure formatters — always safe to run regardless of where
+// the config came from, unlike the tool's own --fix.
+async function runPreFixCommands(tool, targetDir, configPath, toolFiles, timeout) {
+  if (typeof tool.preFixCommands !== 'function') return;
+  for (const cmd of tool.preFixCommands(targetDir, configPath, { files: toolFiles })) {
+    await spawnAndCollect(cmd.bin, cmd.args, { cwd: cmd.cwd, timeout });
+  }
+}
+
 function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix = false, licenses = false, updateDb = false, verbose = false, configSource = 'none', exclude = [] } = {}) {
   return new Promise(async (resolve) => {
     const start = Date.now();
@@ -67,17 +76,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
         ? files.filter(f => tool.extensions.some(ext => f.endsWith(ext)))
         : files;
 
-      // Run preFixCommands sequentially if in fix mode and tool supports them
-      // preFixCommands are pure formatters — always safe regardless of config source
-      if (fix && typeof tool.preFixCommands === 'function') {
-        const preCmds = tool.preFixCommands(targetDir, configPath, { files: toolFiles });
-        for (const cmd of preCmds) {
-          await spawnAndCollect(cmd.bin, cmd.args, {
-            cwd: cmd.cwd,
-            timeout,
-          });
-        }
-      }
+      if (fix) await runPreFixCommands(tool, targetDir, configPath, toolFiles, timeout);
 
       if (updateDb && typeof tool.updateDbCommands === 'function') {
         const dbError = await runDbUpdate(tool, targetDir, configPath, verbose);

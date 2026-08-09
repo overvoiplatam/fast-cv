@@ -55,7 +55,9 @@ describe('mypy adapter (json mode — mypy >= 1.11)', () => {
   });
 
   it('builds command with files list', () => {
-    testBuildCommandWithFiles(mypy);
+    const { args } = testBuildCommandWithFiles(mypy);
+    assert.ok(args.includes('src/a.py'));
+    assert.ok(!args.includes('/tmp/project'));
   });
 
   it('parses JSON Lines output', () => {

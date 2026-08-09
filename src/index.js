@@ -271,7 +271,7 @@ async function runScanFlow(precheckResult, targetDir, parsed, prune) {
   });
   if (parsed.noDocstring) stripDocsFindings(filtered);
 
-  const warnings = precheckResult.warnings || [];
+  const warnings = [...(prune.warnings || []), ...(precheckResult.warnings || [])];
   process.stdout.write(parsed.fmt({
     targetDir, results: filtered, warnings, fileCount: prune.files.length,
   }));
@@ -296,7 +296,8 @@ async function runSbomFlow(targetDir, options) {
     for (const cmd of trivyTool.updateDbCommands(targetDir, config.path)) {
       const { stderr, exitCode } = await spawnTrivy(cmd.args);
       if (exitCode !== 0) {
-        process.stderr.write(`trivy DB update failed: ${stderr.slice(0, 500) || `exit code ${exitCode}`}\n`);
+        const detail = stderr.slice(0, 500) || `exit code ${exitCode}`;
+        process.stderr.write(`trivy DB update failed: ${detail}\n`);
         process.exit(EXIT_PRECHECK_FAILED);
       }
     }

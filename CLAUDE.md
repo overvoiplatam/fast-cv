@@ -31,12 +31,12 @@ node bin/fast-cv.js --no-docstring .  # suppress DOCS tag findings
 | `src/runner.js` | Sequential execution with optional timeout + verbose progress |
 | `src/normalizer.js` | Markdown report + post-filter |
 | `src/sarif.js` | SARIF 2.1.0 output |
-| `src/findings.js` | Shared finding collection helper |
-| `src/constants.js` | Shared constants and JSON Lines parser |
-| `src/line-check.js` | Built-in file length checker |
-| `src/git-changes.js` | Git-changed file detection |
+| `src/findings.js`, `src/constants.js` | Shared finding collector; constants + JSON Lines parser |
+| `src/line-check.js`, `src/git-changes.js` | File length checker; git-changed file detection |
 | `src/tools/*.js` | One adapter per tool |
 | `defaults/` | Shipped configs (ruff, eslint, mypy, semgrep, stylelint, golangci-lint) |
+
+Full file map: [docs/architecture.md](docs/architecture.md).
 
 ## Code Conventions
 

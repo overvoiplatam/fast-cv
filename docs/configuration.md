@@ -142,14 +142,35 @@ Files are excluded via a layered ignore system in `src/pruner.js`:
 
 | Source | Applied At | Notes |
 |--------|-----------|-------|
-| Hardcoded dirs | Always | `node_modules`, `dist`, `build`, `.git`, `__pycache__`, etc. (L8-70) |
-| Hardcoded files | Always | Lock files: `package-lock.json`, `yarn.lock`, etc. (L72-81) |
-| `.gitignore` | Auto-loaded | Standard git ignore patterns (L131) |
-| `.fcvignore` | Auto-loaded | fast-cv-specific ignore file (L135) |
-| `--exclude` | CLI flag | Additional patterns via command line (L127) |
+| Hardcoded dirs | Always | `node_modules`, `dist`, `build`, `.git`, `__pycache__`, `site-packages`, etc. |
+| Hardcoded files | Always | Lock files: `package-lock.json`, `yarn.lock`, etc. |
+| Virtualenv markers | Always | Any directory containing a `pyvenv.cfg` is dropped whole |
+| `.gitignore` | Auto-loaded | Standard git ignore patterns |
+| `.fcvignore` | Auto-loaded | fast-cv-specific ignore file |
+| `--exclude` | CLI flag | Additional patterns via command line |
 | `--only` | CLI flag | Inverse — scan only matching files |
 
-All patterns use gitignore syntax via the `ignore` npm package.
+All patterns use gitignore syntax via the `ignore` npm package, so the hardcoded
+list accepts globs (`.venv*`, `*.egg-info`) as well as plain directory names.
+
+### Vendored code detection
+
+Vendored dependencies are the dominant source of report noise: a single
+unignored virtualenv can contribute six figures of findings and dwarf the
+project's own code. Two independent guards cover it.
+
+1. **Name patterns** — `.venv*`, `venv*`, `site-packages`, `dist-packages`,
+   `.conda`, `.direnv`, `.nox`, `.eggs`, `*.egg-info` and friends. The
+   `site-packages`/`dist-packages` entries are the important ones: they match
+   installed packages regardless of what the enclosing environment is called.
+2. **`pyvenv.cfg` marker** — PEP 405 requires this file at every virtualenv
+   root, so a venv is recognized even under a name no pattern anticipated. A
+   marker at the scan root itself is ignored, so pointing fast-cv directly at a
+   virtualenv still works.
+
+If one top-level directory still supplies more than half of a scan of 200+
+files, the report emits a warning naming it, so an escaped vendor tree is
+visible rather than silently inflating the results.
 
 ## CLI Reference
 
