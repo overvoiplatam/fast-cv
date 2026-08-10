@@ -28,28 +28,31 @@ export function cleanToolError(message) {
 // Recognizable failure shapes, most specific first. Each maps a message to the
 // one action that resolves it. Anything unmatched gets no hint rather than a
 // guess — a wrong instruction is worse than none.
+// Kept as separate simple patterns rather than one combined expression: the
+// database and the failure word can appear in either order, and spelling that
+// as a single regex costs more in complexity than it saves.
+const DB_SUBJECT = /\bdb\b|database/i;
+const DB_PROBLEM = /download|update|stale|expired|missing/i;
+
 const HINT_RULES = [
   {
     // stylelint/eslint configs `extend` packages that live in fast-cv's own
     // node_modules; a partial install leaves them missing.
-    match: /could not find ["']?([\w@/-]+)|cannot find module ["']?([\w@/-]+)/i,
+    matches: msg => /could not find ["']?[\w@/-]+/i.test(msg) || /cannot find module/i.test(msg),
     hint: 'A package the shipped config depends on is missing. Reinstall it with '
       + '`install.sh --repair` from your fast-cv install directory.',
   },
   {
-    match: /command not found|ENOENT|not recognized as/i,
-    hint: null,  // filled from the tool's own installHint
+    matches: msg => /command not found|ENOENT|not recognized as/i.test(msg),
     useInstallHint: true,
   },
   {
-    match: /permission denied|EACCES/i,
+    matches: msg => /permission denied|EACCES/i.test(msg),
     hint: 'fast-cv could not read or execute something it needs. Check the permissions '
       + 'on the target directory and on the tool binary.',
   },
   {
-    // The database and the failure word can appear in either order:
-    // "database is stale", "failed to download vulnerability DB".
-    match: /(?:\bdb\b|database)[^.]*(?:download|update|stale|expired|missing)|(?:download|update|stale|expired|missing)[^.]*(?:\bdb\b|database)/i,
+    matches: msg => DB_SUBJECT.test(msg) && DB_PROBLEM.test(msg),
     hint: 'Refresh the vulnerability databases with `fast-cv --update-db .`.',
   },
 ];
@@ -62,7 +65,7 @@ export function inferToolErrorHint(message, installHint) {
   if (!message) return null;
 
   for (const rule of HINT_RULES) {
-    if (!rule.match.test(message)) continue;
+    if (!rule.matches(message)) continue;
     if (rule.useInstallHint) {
       return installHint ? `Install the tool: ${installHint}` : null;
     }

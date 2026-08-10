@@ -491,9 +491,12 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
         *)              VALE_TARGET="" ;;
       esac
       if [[ -n "${VALE_TARGET}" ]]; then
+        # `|| true`: with `set -euo pipefail` a rate-limited GitHub API or a
+        # grep that matches nothing makes this assignment fail, which would
+        # abort the whole installer over one optional tool.
         VALE_URL="$(curl -sfL https://api.github.com/repos/errata-ai/vale/releases/latest \
           | grep "browser_download_url.*${VALE_TARGET}.*tar.gz\"" \
-          | head -1 | cut -d '"' -f 4)"
+          | head -1 | cut -d '"' -f 4 || true)"
         if [[ -n "${VALE_URL}" ]]; then
           curl -sfL "${VALE_URL}" | tar xz -C "${LOCAL_BIN}" vale 2>/dev/null && VALE_INSTALLED=true
         fi
