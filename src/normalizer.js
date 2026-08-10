@@ -1,5 +1,6 @@
 import { relative, isAbsolute } from 'node:path';
 import { collectFindings } from './findings.js';
+import { cleanToolError } from './tool-errors.js';
 
 export function filterFindings(results, targetDir, ignoreFilter, onlyFilter, { verbose = false } = {}) {
   return results.map(result => {
@@ -95,10 +96,16 @@ function renderFindingsSection(allFindings) {
 }
 
 function renderToolErrorsSection(toolErrors) {
-  const lines = [`## Tool Errors (${toolErrors.length})`, ''];
+  const lines = [
+    `## Tool Errors (${toolErrors.length})`,
+    '',
+    'These tools did not run to completion, so their findings are missing from this report.',
+    '',
+  ];
   for (const r of toolErrors) {
     const duration = r.duration != null ? ` (${(r.duration / 1000).toFixed(1)}s)` : '';
-    lines.push(`- **[ERROR]** \`${r.tool}\` ${r.error}${duration}`);
+    lines.push(`- **[ERROR]** \`${r.tool}\` ${cleanToolError(r.error)}${duration}`);
+    if (r.hint) lines.push(`  - **Fix**: ${r.hint}`);
   }
   lines.push('');
   return lines.join('\n');

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { inferToolErrorHint } from './tool-errors.js';
 
 function spawnAndCollect(bin, args, opts) {
   return new Promise((resolve) => {
@@ -54,6 +55,11 @@ async function runDbUpdate(tool, targetDir, configPath, verbose) {
   return null;
 }
 
+// A tool that could not be started is almost always a tool that is not there.
+function installHintFor(tool) {
+  return tool.installHint ? `Install the tool: ${tool.installHint}` : null;
+}
+
 // preFixCommands are pure formatters — always safe to run regardless of where
 // the config came from, unlike the tool's own --fix.
 async function runPreFixCommands(tool, targetDir, configPath, toolFiles, timeout) {
@@ -85,6 +91,8 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
             tool: tool.name,
             findings: [],
             error: `${tool.name} DB update failed: ${dbError}`,
+            hint: `Retry the download with \`fast-cv --update-db .\`. If it keeps failing, `
+              + `the registry may be unreachable from this network.`,
             duration: Date.now() - start,
             fixSkipped,
           });
@@ -103,6 +111,8 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
           tool: tool.name,
           findings: [],
           error: `Timeout after ${(timeout / 1000).toFixed(0)}s`,
+          hint: 'Raise the budget with `--timeout <seconds>`, or narrow the scan with '
+            + '`--only` or `--git-only`.',
           duration,
           fixSkipped,
         });
@@ -114,6 +124,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
           tool: tool.name,
           findings: [],
           error: `Failed to spawn ${bin}: ${result.spawnError.message}`,
+          hint: installHintFor(tool),
           duration,
           fixSkipped,
         });
@@ -134,6 +145,8 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
           tool: tool.name,
           findings: [],
           error: err.message,
+          // An adapter that knows the cause says so itself; otherwise infer.
+          hint: err.hint || inferToolErrorHint(err.message, tool.installHint),
           duration,
           fixSkipped,
         });
@@ -144,6 +157,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
         tool: tool.name,
         findings: [],
         error: `Failed to spawn ${tool.name}: ${err.message}`,
+        hint: installHintFor(tool),
         duration,
         fixSkipped,
       });

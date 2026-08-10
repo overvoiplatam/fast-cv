@@ -69,7 +69,15 @@ export default {
   parseOutput(stdout, stderr, exitCode) {
     // 0=clean, 2=lint problems, 1=fatal, 78=bad config, 64=bad CLI
     if (STYLELINT_FATAL_EXITS.has(exitCode) && !stdout.trim()) {
-      throw new Error(`stylelint error (exit ${exitCode}): ${(stderr || '').slice(0, 500)}`);
+      const err = new Error(`stylelint error (exit ${exitCode}): ${(stderr || '').slice(0, 500)}`);
+      // stylelint's own wording ("use the configBasedir option") points at the
+      // caller, but the config is ours — the user just needs the package back.
+      const missing = /Could not find ["']?([\w@/-]+)/.exec(stderr || '');
+      if (missing) {
+        err.hint = `The shipped stylelint config extends \`${missing[1]}\`, which is not installed `
+          + 'in fast-cv\'s node_modules. Run `install.sh --repair` from your fast-cv install directory.';
+      }
+      throw err;
     }
     if (!stdout.trim()) return [];
     return parseStylelintJson(stdout).flatMap(toStylelintFindings);

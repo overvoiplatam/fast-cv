@@ -219,7 +219,9 @@ There is no general-purpose JSON pretty-printer in fast-cv by design — `--fix`
 
 ### Tool Errors and Exit Codes
 
-Tool runtime failures are reported separately from code findings. Missing tools remain warnings when at least one applicable tool can run, but a selected tool that errors, times out, or produces unparseable output makes validation incomplete and exits `2`. Trivy database cache failures include guidance to run `fast-cv --update-db .` or rerun `install.sh --mode all`.
+Tool runtime failures are reported separately from code findings. Missing tools remain warnings when at least one applicable tool can run, but a selected tool that errors, times out, or produces unparseable output makes validation incomplete and exits `2`.
+
+A failed tool contributes no findings, so the `Tool Errors` section says so explicitly rather than letting a silent gap read as a clean result. Each entry is one line — stack frames are stripped, since the frames are inside the tool and say nothing about the cause — followed by a **Fix** line where the cause is recognizable: a missing config package points at `install.sh --repair`, an absent binary repeats the tool's install command, a timeout suggests `--timeout` or a narrower scan, and a stale vulnerability database points at `fast-cv --update-db .`. Adapters can attach their own remediation by setting `hint` on the error they throw, which takes precedence over the inferred one. Unrecognized failures get no **Fix** line at all — a wrong instruction costs more than a missing one.
 
 | Code | Meaning |
 |------|---------|

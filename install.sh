@@ -379,20 +379,7 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
   # eslint (Node — global install with sudo fallback)
   install_node_if_missing eslint
 
-  # eslint plugins — install into fast-cv's own node_modules/ so the shipped config can find them
-  # (global npm packages are NOT in Node's resolution chain for the config file)
-  ESLINT_PLUGINS=(
-    eslint-plugin-sonarjs
-    eslint-plugin-security
-    typescript-eslint
-    eslint-plugin-react
-    eslint-plugin-react-hooks
-    eslint-plugin-vue
-    eslint-plugin-svelte
-    eslint-plugin-jsonc
-    eslint-plugin-jsdoc
-  )
-  install_config_peers "eslint plugins" "${ESLINT_PLUGINS[@]}"
+  # eslint plugins are installed in step 6 — see the note there on ordering.
 
   # jscpd, knip, tsc (Node)
   install_node_if_missing jscpd
@@ -425,8 +412,7 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
 
   # stylelint (Node — CSS linter)
   install_node_if_missing stylelint
-  # stylelint-config-standard — install into fast-cv's node_modules/ for config resolution
-  install_config_peers "stylelint-config-standard" stylelint-config-standard
+  # stylelint-config-standard is installed in step 6 — see the note there on ordering.
 
   # sqlfluff (Python — SQL linter)
   install_python_if_missing sqlfluff
@@ -592,6 +578,27 @@ if [[ "${INSTALL_MODE}" == "all" || "${INSTALL_MODE}" == "app" ]]; then
   info "Installing npm dependencies..."
   cd "${SCRIPT_DIR}"
   npm install && ok "npm dependencies installed"
+
+  # ORDER MATTERS: these must come *after* `npm install`. They are installed
+  # with --no-save, so npm treats them as extraneous and prunes them on the next
+  # reconcile — installing them earlier means installing and then deleting them
+  # in the same run, which is exactly what used to leave stylelint failing with
+  # "Could not find stylelint-config-standard" after a successful install.
+  # They live here rather than in step 4 for the same reason: `--mode app` also
+  # runs npm install, so it would otherwise silently break a full install.
+  ESLINT_PLUGINS=(
+    eslint-plugin-sonarjs
+    eslint-plugin-security
+    typescript-eslint
+    eslint-plugin-react
+    eslint-plugin-react-hooks
+    eslint-plugin-vue
+    eslint-plugin-svelte
+    eslint-plugin-jsonc
+    eslint-plugin-jsdoc
+  )
+  install_config_peers "eslint plugins" "${ESLINT_PLUGINS[@]}"
+  install_config_peers "stylelint-config-standard" stylelint-config-standard
 
   # Create global command via symlink in ~/.local/bin (no sudo needed)
   info "Linking fast-cv to ${LOCAL_BIN}/fast-cv..."

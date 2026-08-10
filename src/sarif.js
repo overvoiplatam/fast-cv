@@ -27,7 +27,7 @@ export function formatSarif({ targetDir, results, warnings = [], fix = false }) 
     .map(r => ({ tool: r.tool, duration: r.duration || 0, findings: (r.findings || []).length }));
   const toolErrors = results
     .filter(r => r.error)
-    .map(r => ({ tool: r.tool, error: r.error, duration: r.duration || 0 }));
+    .map(r => ({ tool: r.tool, error: r.error, hint: r.hint || undefined, duration: r.duration || 0 }));
 
   // Collect all findings with normalized paths
   const allFindings = collectFindings(results, targetDir, { includeSourceTool: true });
