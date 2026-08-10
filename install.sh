@@ -11,6 +11,9 @@ INSTALL_DIR="${HOME}/.local/share/fast-cv"
 CONFIG_DIR="${HOME}/.config/fast-cv/defaults"
 LOCAL_BIN="${HOME}/.local/bin"
 
+# Set by --repair: reinstall every tool even when one is already present.
+FORCE_REINSTALL="false"
+
 # Preserve the user's original PATH so the end-of-install hint reflects their shell config,
 # not the in-script mutations below.
 ORIG_PATH="${PATH}"
@@ -52,6 +55,67 @@ ok()    { echo -e "${GREEN}[OK]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 fail()  { echo -e "${RED}[FAIL]${NC} $*"; exit 1; }
 
+# ─── Version floors ─────────────────────────────────────────────────
+# Minimum major version for tools where an older release cannot work with the
+# configs fast-cv ships. Presence alone is not enough for these — eslint 8 and
+# below try to parse the shipped eslint.config.mjs as YAML and die.
+min_major_for() {
+  case "$1" in
+    eslint) echo 9 ;;
+    *)      echo 0 ;;
+  esac
+}
+
+# First integer in a tool's --version output: "v6.4.0" → 6, "cpd 5.0.14" → 5.
+detect_major() {
+  local bin="$1" out
+  out="$("${bin}" --version 2>/dev/null | head -1)" || return 1
+  out="$(printf '%s' "${out}" | grep -oE '[0-9]+' | head -1)"
+  [[ -n "${out}" ]] || return 1
+  printf '%s' "${out}"
+}
+
+version_of() {
+  "$1" --version 2>/dev/null | head -1 || echo 'version unknown'
+}
+
+# True when the tool should be (re)installed: --repair was passed, the binary is
+# absent, or the installed version is below its floor. Reports the skip itself,
+# so callers only handle the install path.
+tool_needs_install() {
+  local bin="$1" floor major
+  [[ "${FORCE_REINSTALL}" == "true" ]] && return 0
+  command -v "${bin}" &>/dev/null || return 0
+
+  floor="$(min_major_for "${bin}")"
+  if [[ "${floor}" -gt 0 ]]; then
+    major="$(detect_major "${bin}" || true)"
+    if [[ -n "${major}" ]] && [[ "${major}" -lt "${floor}" ]]; then
+      warn "${bin} $(version_of "${bin}") is below the required v${floor} — reinstalling"
+      return 0
+    fi
+  fi
+
+  ok "${bin} already installed: $(version_of "${bin}")"
+  return 1
+}
+
+# Installing successfully does not prove the right binary will run: a distro
+# package earlier in PATH keeps winning. Check what actually resolves.
+verify_version_floor() {
+  local bin="$1" floor major
+  floor="$(min_major_for "${bin}")"
+  [[ "${floor}" -gt 0 ]] || return 0
+  command -v "${bin}" &>/dev/null || return 0
+  major="$(detect_major "${bin}" || true)"
+  [[ -n "${major}" ]] || return 0
+  [[ "${major}" -lt "${floor}" ]] || return 0
+
+  warn "${bin} resolves to $(command -v "${bin}") — still v${major}.x, needs >= v${floor}."
+  warn "  Another installation is shadowing it. Remove that one (e.g. 'sudo apt remove ${bin}')"
+  warn "  or put the npm global bin directory earlier in your PATH."
+}
+
 # ─── Helper: install a global npm package (user → sudo fallback) ───
 install_npm_global() {
   if npm install -g "$@" 2>/dev/null; then
@@ -67,32 +131,35 @@ install_npm_global() {
 # ─── Helper: install a Python CLI tool (pip → pipx → uv fallback) ───
 install_python_tool() {
   local tool="$1"
+  # --repair must replace an existing install, not no-op on it.
+  local force_flag=() pip_upgrade=()
+  if [[ "${FORCE_REINSTALL}" == "true" ]]; then
+    force_flag=(--force)
+    pip_upgrade=(--upgrade --force-reinstall)
+  fi
   # Try pipx first (PEP 668 compliant, isolated venvs)
   if command -v pipx &>/dev/null; then
     info "Installing ${tool} via pipx..."
-    pipx install "${tool}" && return 0
+    pipx install "${force_flag[@]}" "${tool}" && return 0
   fi
   # Try uv tool install (fast, isolated)
   if command -v uv &>/dev/null; then
     info "Installing ${tool} via uv..."
-    uv tool install "${tool}" && return 0
+    uv tool install "${force_flag[@]}" "${tool}" && return 0
   fi
   # Try pip with --user
   info "Installing ${tool} via pip3 --user..."
-  pip3 install --user "${tool}" 2>/dev/null && return 0
+  pip3 install --user "${pip_upgrade[@]}" "${tool}" 2>/dev/null && return 0
   # Try pip with --break-system-packages as last resort
   info "Retrying ${tool} with --break-system-packages..."
-  pip3 install --user --break-system-packages "${tool}" 2>/dev/null && return 0
+  pip3 install --user --break-system-packages "${pip_upgrade[@]}" "${tool}" 2>/dev/null && return 0
   return 1
 }
 
 # ─── Helper: install a Node CLI globally if missing ───
 install_node_if_missing() {
   local bin="$1" pkg="${2:-$1}"
-  if command -v "${bin}" &>/dev/null; then
-    ok "${bin} already installed: $("${bin}" --version 2>/dev/null || echo 'version unknown')"
-    return 0
-  fi
+  tool_needs_install "${bin}" || return 0
   info "Installing ${bin}..."
   if install_npm_global "${pkg}"; then
     ok "${bin} installed"
@@ -104,10 +171,7 @@ install_node_if_missing() {
 # ─── Helper: install a binary via a curl-piped installer if missing ───
 install_binary_if_missing() {
   local bin="$1" url="$2"
-  if command -v "${bin}" &>/dev/null; then
-    ok "${bin} already installed: $("${bin}" --version 2>/dev/null | head -1)"
-    return 0
-  fi
+  tool_needs_install "${bin}" || return 0
   info "Installing ${bin}..."
   if curl -sfL "${url}" | sh -s -- -b "${LOCAL_BIN}" 2>/dev/null; then
     ok "${bin} installed to ${LOCAL_BIN}"
@@ -119,10 +183,7 @@ install_binary_if_missing() {
 # ─── Helper: install a Python CLI via install_python_tool if missing ───
 install_python_if_missing() {
   local bin="$1" pkg="${2:-$1}"
-  if command -v "${bin}" &>/dev/null; then
-    ok "${bin} already installed: $("${bin}" --version 2>/dev/null || echo 'version unknown')"
-    return 0
-  fi
+  tool_needs_install "${bin}" || return 0
   if install_python_tool "${pkg}"; then
     ok "${bin} installed"
   else
@@ -142,15 +203,25 @@ while [[ $# -gt 0 ]]; do
       INSTALL_MODE="${1#*=}"
       shift
       ;;
+    --repair)
+      FORCE_REINSTALL="true"
+      shift
+      ;;
     -h|--help)
       echo "fast-cv installer"
       echo ""
-      echo "Usage: ./install.sh [--mode MODE]"
+      echo "Usage: ./install.sh [--mode MODE] [--repair]"
       echo ""
       echo "Modes:"
       echo "  all       Full install: app + tools + configs (default for fresh install)"
       echo "  app       Reinstall application only (npm deps + global link)"
       echo "  configs   Reinstall default configurations only (overwrites existing)"
+      echo ""
+      echo "Flags:"
+      echo "  --repair  Force-reinstall every tool and its dependencies, even ones"
+      echo "            already present. Without it, tools that are installed are"
+      echo "            left alone (except when below a required minimum version)."
+      echo "            Implies --mode all and skips the interactive prompt."
       echo ""
       echo "On reinstall, if no --mode is given, you will be prompted to choose."
       exit 0
@@ -191,6 +262,11 @@ fi
 
 CURRENT_VERSION="$(node -e "import('${SCRIPT_DIR}/package.json', {with:{type:'json'}}).then(m=>console.log(m.default.version))" 2>/dev/null || echo 'unknown')"
 
+# --repair states the intent outright, so don't ask what to reinstall.
+if [[ "${FORCE_REINSTALL}" == "true" ]] && [[ -z "${INSTALL_MODE}" ]]; then
+  INSTALL_MODE="all"
+fi
+
 if [[ -n "${PREV_VERSION}" ]] && [[ -z "${INSTALL_MODE}" ]]; then
   echo ""
   echo -e "${BOLD}Previous installation detected:${NC} fast-cv v${PREV_VERSION}"
@@ -220,6 +296,9 @@ if [[ -z "${INSTALL_MODE}" ]]; then
 fi
 
 info "Install mode: ${INSTALL_MODE}"
+if [[ "${FORCE_REINSTALL}" == "true" ]]; then
+  info "Repair mode: reinstalling tools even when already present"
+fi
 
 # ─── Step 2: Detect OS ──────────────────────────────────────────────
 OS="$(uname -s)"
@@ -390,9 +469,7 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
   install_node_if_missing markdownlint-cli2
 
   # vale (Go binary — prose style linter)
-  if command -v vale &>/dev/null; then
-    ok "vale already installed: $(vale --version 2>/dev/null | head -1)"
-  else
+  if tool_needs_install vale; then
     info "Installing vale..."
     if [[ "${OS}" == "Darwin" ]] && ! command -v brew &>/dev/null; then
       info "Homebrew not found; falling back to go/pre-built. Install Homebrew from https://brew.sh for the fastest vale install on macOS."
@@ -428,6 +505,20 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
       warn "Failed to install vale — install manually: brew install vale"
     fi
   fi
+
+  # vale renders reStructuredText by shelling out to docutils' rst2html. Without
+  # it every .rst file fails with "E100 [lintRST] Runtime error".
+  if tool_needs_install rst2html; then
+    info "Installing docutils (provides rst2html) for vale's reStructuredText support..."
+    if install_python_tool docutils; then
+      ok "docutils installed"
+    else
+      warn "Failed to install docutils — vale will error on .rst files"
+    fi
+  fi
+
+  # Installing is not the same as resolving: warn if an older binary still wins.
+  verify_version_floor eslint
 else
   info "Skipping tool dependencies (mode: ${INSTALL_MODE})"
 fi

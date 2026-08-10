@@ -95,7 +95,28 @@ When a previous installation is detected, the installer prompts you to choose:
 ./install.sh --mode all     # Full reinstall (app + tools + configs)
 ./install.sh --mode app     # Reinstall application only (npm deps + link)
 ./install.sh --mode configs # Reinstall default configs (overwrites existing)
+./install.sh --repair       # Force-reinstall every tool, present or not
 ```
+
+### Repairing a broken toolchain
+
+`--mode all` installs what is **missing**; a tool that is already present is
+left alone. That is the wrong behavior when an installed tool is broken or too
+old, so `--repair` reinstalls everything unconditionally, including the
+dependencies that are not binaries themselves — eslint plugins,
+`stylelint-config-standard`, and `docutils` (which supplies the `rst2html` that
+vale needs for reStructuredText).
+
+Two things happen regardless of `--repair`:
+
+- Tools with a **minimum version** are reinstalled when the installed one is
+  below it, instead of being reported as fine. Today that is eslint, which
+  needs >= 9 to read the shipped flat config — older releases parse
+  `eslint.config.mjs` as YAML and fail.
+- After installing, the installer checks what the tool name actually
+  **resolves** to. If a distro package earlier in `PATH` still shadows the
+  version just installed, it says so and names the path, since a successful
+  install is not proof that the right binary will run.
 
 ### Requirements
 

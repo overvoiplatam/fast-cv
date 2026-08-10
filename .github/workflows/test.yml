@@ -118,6 +118,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: bash install.sh --mode all
+      # --repair only differs from a fresh install when the tools are already
+      # there, so it has to run second, on the machine the step above provisioned.
+      - name: install.sh --repair over an existing install
+        run: bash install.sh --repair
       - name: Verify fast-cv runs
         run: |
           export PATH="$HOME/.local/bin:$PATH"
@@ -126,7 +130,10 @@ jobs:
       # installed runs against our own source. Exits non-zero on any
       # finding, so the audit signal is "our shipped rules pass against
       # the codebase that ships them" — on every push, on both OSes.
+      # install.sh is exempt from the file-length check: it must stay a single
+      # self-contained file to keep working as `curl ... | bash`, so the
+      # "split into smaller modules" advice cannot apply to it.
       - name: fast-cv self-scan
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          fast-cv .
+          fast-cv --max-lines-omit install.sh .
