@@ -131,28 +131,34 @@ install_npm_global() {
 # ─── Helper: install a Python CLI tool (pip → pipx → uv fallback) ───
 install_python_tool() {
   local tool="$1"
-  # --repair must replace an existing install, not no-op on it.
-  local force_flag=() pip_upgrade=()
+  # --repair must replace an existing install, not no-op on it. Plain strings
+  # rather than arrays: macOS ships bash 3.2, where expanding an empty array
+  # under `set -u` aborts the script.
+  local force_flag="" pip_upgrade=""
   if [[ "${FORCE_REINSTALL}" == "true" ]]; then
-    force_flag=(--force)
-    pip_upgrade=(--upgrade --force-reinstall)
+    force_flag="--force"
+    pip_upgrade="--upgrade --force-reinstall"
   fi
   # Try pipx first (PEP 668 compliant, isolated venvs)
   if command -v pipx &>/dev/null; then
     info "Installing ${tool} via pipx..."
-    pipx install "${force_flag[@]}" "${tool}" && return 0
+    # shellcheck disable=SC2086  # deliberate word splitting: flag may be empty
+    pipx install ${force_flag} "${tool}" && return 0
   fi
   # Try uv tool install (fast, isolated)
   if command -v uv &>/dev/null; then
     info "Installing ${tool} via uv..."
-    uv tool install "${force_flag[@]}" "${tool}" && return 0
+    # shellcheck disable=SC2086  # deliberate word splitting: flag may be empty
+    uv tool install ${force_flag} "${tool}" && return 0
   fi
   # Try pip with --user
   info "Installing ${tool} via pip3 --user..."
-  pip3 install --user "${pip_upgrade[@]}" "${tool}" 2>/dev/null && return 0
+  # shellcheck disable=SC2086  # deliberate word splitting: flags may be empty
+  pip3 install --user ${pip_upgrade} "${tool}" 2>/dev/null && return 0
   # Try pip with --break-system-packages as last resort
   info "Retrying ${tool} with --break-system-packages..."
-  pip3 install --user --break-system-packages "${pip_upgrade[@]}" "${tool}" 2>/dev/null && return 0
+  # shellcheck disable=SC2086  # deliberate word splitting: flags may be empty
+  pip3 install --user --break-system-packages ${pip_upgrade} "${tool}" 2>/dev/null && return 0
   return 1
 }
 
