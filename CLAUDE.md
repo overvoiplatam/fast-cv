@@ -58,7 +58,9 @@ Canonical source: [docs/tools.md](docs/tools.md)
 Every change must satisfy:
 
 1. `npm test` passes
-2. `node bin/fast-cv.js --tools=eslint .` exits clean (exit code 0)
+2. `node bin/fast-cv.js --tools=eslint --max-lines-omit install.sh .` exits clean (exit code 0)
+   — `install.sh` is exempt from the line check because it must stay a single
+   file for the `curl ... | bash` install path
 3. New tools: adapter in `src/tools/` + test in `test/tools/` + entry in `src/tools/index.js`
 4. New configs: registered in `src/config-resolver.js` + shipped in `defaults/`
 

@@ -72,7 +72,10 @@ jobs:
             eslint-plugin-svelte \
             eslint-plugin-jsonc \
             eslint-plugin-jsdoc
-      - run: node bin/fast-cv.js --tools=eslint .
+      # The built-in line check runs alongside any --tools selection, and
+      # install.sh is exempt from it: it must stay one self-contained file for
+      # the `curl ... | bash` path, so it cannot be split.
+      - run: node bin/fast-cv.js --tools=eslint --max-lines-omit install.sh .
 
   # Fast signal: exercises the npm install + symlink path on both OSes.
   # Finishes in ~1 min — gives a quick red light if the app side regresses
