@@ -586,7 +586,9 @@ if [[ "${INSTALL_MODE}" == "all" || "${INSTALL_MODE}" == "app" ]]; then
   # "Could not find stylelint-config-standard" after a successful install.
   # They live here rather than in step 4 for the same reason: `--mode app` also
   # runs npm install, so it would otherwise silently break a full install.
-  ESLINT_PLUGINS=(
+  # One call, not one per tool: each --no-save install prunes the packages the
+  # previous one added, so splitting them leaves only the last batch behind.
+  CONFIG_PEERS=(
     eslint-plugin-sonarjs
     eslint-plugin-security
     typescript-eslint
@@ -596,9 +598,9 @@ if [[ "${INSTALL_MODE}" == "all" || "${INSTALL_MODE}" == "app" ]]; then
     eslint-plugin-svelte
     eslint-plugin-jsonc
     eslint-plugin-jsdoc
+    stylelint-config-standard
   )
-  install_config_peers "eslint plugins" "${ESLINT_PLUGINS[@]}"
-  install_config_peers "stylelint-config-standard" stylelint-config-standard
+  install_config_peers "eslint plugins and stylelint-config-standard" "${CONFIG_PEERS[@]}"
 
   # Create global command via symlink in ~/.local/bin (no sudo needed)
   info "Linking fast-cv to ${LOCAL_BIN}/fast-cv..."
