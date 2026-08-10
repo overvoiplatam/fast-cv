@@ -89,10 +89,38 @@ describe('vulture adapter', () => {
     assert.equal(findings[1].tag, 'DEAD_CODE');
   });
 
-  it('falls back to throwing on exit 3 when stderr has no parseable lines', () => {
+  // Exit 3 is vulture's DeadCode code, not a failure. Treating it as an error
+  // discarded every finding of a normal run.
+  it('returns dead-code findings on exit 3 with empty stderr', () => {
+    const stdout = "app/config.py:22: unused variable 'model_config' (60% confidence)\n"
+      + "app/main.py:15: unused import 'os' (90% confidence)\n";
+    const findings = vulture.parseOutput(stdout, '', 3);
+    assert.equal(findings.length, 2);
+    assert.ok(findings.every(f => f.tag === 'DEAD_CODE'));
+    assert.equal(findings[0].file, 'app/config.py');
+    assert.equal(findings[1].file, 'app/main.py');
+  });
+
+  it('surfaces parse errors on exit 1 (InvalidInput)', () => {
+    const stderr = 'broken.py:1: invalid syntax at "def f(:"\n';
+    const findings = vulture.parseOutput('', stderr, 1);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].tag, 'LINTER');
+    assert.equal(findings[0].rule, 'parse-error');
+    assert.equal(findings[0].file, 'broken.py');
+  });
+
+  it('throws on exit 1 when nothing parseable was reported', () => {
     assert.throws(
-      () => vulture.parseOutput('', 'totally unrecognized garbage\n', 3),
-      /vulture error \(exit 3\)/
+      () => vulture.parseOutput('', 'totally unrecognized garbage\n', 1),
+      /vulture error \(exit 1\)/
+    );
+  });
+
+  it('throws on unknown exit codes', () => {
+    assert.throws(
+      () => vulture.parseOutput('', '', 4),
+      /vulture error \(exit 4\)/
     );
   });
 

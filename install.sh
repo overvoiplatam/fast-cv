@@ -174,6 +174,24 @@ install_node_if_missing() {
   fi
 }
 
+# ─── Helper: install packages the shipped configs resolve at runtime ───
+# These live in fast-cv's own node_modules rather than as dependencies, because
+# globally installed packages are not on Node's resolution path for a config
+# file. Their peer ranges routinely disagree across eslint majors, and one
+# unsatisfiable peer aborts the whole install — so peer resolution is relaxed.
+# npm's output is deliberately not silenced: a failure here stays invisible
+# until a tool later reports a baffling "Could not find <package>".
+install_config_peers() {
+  local label="$1"
+  shift
+  info "Installing ${label} into fast-cv node_modules (${SCRIPT_DIR})..."
+  if (cd "${SCRIPT_DIR}" && npm install --no-save --legacy-peer-deps "$@"); then
+    ok "${label} installed"
+  else
+    warn "Failed to install ${label} — tools using the shipped configs will error until this succeeds"
+  fi
+}
+
 # ─── Helper: install a binary via a curl-piped installer if missing ───
 install_binary_if_missing() {
   local bin="$1" url="$2"
@@ -374,12 +392,7 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
     eslint-plugin-jsonc
     eslint-plugin-jsdoc
   )
-  info "Installing eslint plugins into fast-cv node_modules..."
-  if (cd "${SCRIPT_DIR}" && npm install --no-save "${ESLINT_PLUGINS[@]}" 2>/dev/null); then
-    ok "eslint plugins installed"
-  else
-    warn "Failed to install some eslint plugins (eslint will degrade gracefully)"
-  fi
+  install_config_peers "eslint plugins" "${ESLINT_PLUGINS[@]}"
 
   # jscpd, knip, tsc (Node)
   install_node_if_missing jscpd
@@ -413,12 +426,7 @@ if [[ "${INSTALL_MODE}" == "all" ]]; then
   # stylelint (Node — CSS linter)
   install_node_if_missing stylelint
   # stylelint-config-standard — install into fast-cv's node_modules/ for config resolution
-  info "Installing stylelint-config-standard into fast-cv node_modules..."
-  if (cd "${SCRIPT_DIR}" && npm install --no-save stylelint-config-standard 2>/dev/null); then
-    ok "stylelint-config-standard installed"
-  else
-    warn "Failed to install stylelint-config-standard"
-  fi
+  install_config_peers "stylelint-config-standard" stylelint-config-standard
 
   # sqlfluff (Python — SQL linter)
   install_python_if_missing sqlfluff

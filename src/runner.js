@@ -92,7 +92,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
         }
       }
 
-      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files: toolFiles, fix: effectiveFix, licenses, exclude });
+      const { bin, args, cwd } = tool.buildCommand(targetDir, configPath, { files: toolFiles, fix: effectiveFix, licenses, exclude, configSource });
 
       const result = await spawnAndCollect(bin, args, { cwd, timeout });
 

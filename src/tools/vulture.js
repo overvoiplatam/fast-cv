@@ -80,6 +80,49 @@ function parseVultureErrorLine(line) {
   return { file: prefix.file, line: prefix.line, message };
 }
 
+// vulture's exit codes, from ExitCode in vulture/utils.py:
+//   0 NoDeadCode, 1 InvalidInput, 2 InvalidCmdlineArguments, 3 DeadCode.
+// Note 3 means "dead code was found", not "parse failure" — treating it as an
+// error throws away every finding vulture reported.
+const VULTURE_INVALID_INPUT = 1;
+const VULTURE_EXPECTED_EXITS = new Set([0, VULTURE_INVALID_INPUT, 3]);
+
+function collectDeadCode(stdout) {
+  const findings = [];
+  for (const rawLine of (stdout || '').split('\n')) {
+    const p = parseVultureLine(rawLine);
+    if (!p) continue;
+    findings.push({
+      file: p.file,
+      line: p.line,
+      col: undefined,
+      tag: 'DEAD_CODE',
+      rule: 'vulture/unused',
+      severity: 'warning',
+      message: `${p.body} (${p.conf}% confidence)`,
+    });
+  }
+  return findings;
+}
+
+function collectParseErrors(stderr) {
+  const findings = [];
+  for (const rawLine of (stderr || '').split('\n')) {
+    const p = parseVultureErrorLine(rawLine);
+    if (!p) continue;
+    findings.push({
+      file: p.file,
+      line: p.line,
+      col: undefined,
+      tag: 'LINTER',
+      rule: 'parse-error',
+      severity: 'error',
+      message: p.message,
+    });
+  }
+  return findings;
+}
+
 export default {
   name: 'vulture',
   extensions: ['.py', '.pyi'],
@@ -96,47 +139,20 @@ export default {
   },
 
   parseOutput(stdout, stderr, exitCode) {
-    // vulture exits: 0 = clean, 1 = findings, 3 = parser error in target source, 2/>=4 = CLI/usage error.
-    const findings = [];
+    // Dead code goes to stdout, unparseable input to stderr, and a run can
+    // produce both at once — a batch with one broken file still exits
+    // DEAD_CODE while naming the broken file on stderr.
+    const findings = [...collectParseErrors(stderr), ...collectDeadCode(stdout)];
 
-    if (exitCode === 3) {
-      for (const rawLine of (stderr || '').split('\n')) {
-        const p = parseVultureErrorLine(rawLine);
-        if (!p) continue;
-        findings.push({
-          file: p.file,
-          line: p.line,
-          col: undefined,
-          tag: 'LINTER',
-          rule: 'parse-error',
-          severity: 'error',
-          message: p.message,
-        });
-      }
-      // If we couldn't extract any structured parse errors, fall back to
-      // throwing so genuine misconfig isn't swallowed silently.
-      if (findings.length === 0) {
-        throw new Error(`vulture error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
-      }
-    } else if (exitCode >= 2) {
-      throw new Error(`vulture error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
+    if (exitCode === VULTURE_INVALID_INPUT && findings.length === 0) {
+      // No per-file diagnostic to show, so this is misconfiguration rather
+      // than a source file vulture could not read.
+      throw new Error(`vulture error (exit ${exitCode}): ${stderr.slice(0, 500) || 'invalid input'}`);
+    }
+    if (!VULTURE_EXPECTED_EXITS.has(exitCode)) {
+      throw new Error(`vulture error (exit ${exitCode}): ${stderr.slice(0, 500) || `exit code ${exitCode}`}`);
     }
 
-    if (!stdout.trim()) return findings;
-
-    for (const rawLine of stdout.split('\n')) {
-      const p = parseVultureLine(rawLine);
-      if (!p) continue;
-      findings.push({
-        file: p.file,
-        line: p.line,
-        col: undefined,
-        tag: 'DEAD_CODE',
-        rule: 'vulture/unused',
-        severity: 'warning',
-        message: `${p.body} (${p.conf}% confidence)`,
-      });
-    }
     return findings;
   },
 

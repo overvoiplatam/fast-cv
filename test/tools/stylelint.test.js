@@ -27,6 +27,29 @@ describe('stylelint adapter', () => {
     assert.ok(args.includes('/etc/.stylelintrc.json'));
   });
 
+  // The shipped config does `extends: "stylelint-config-standard"`, which
+  // stylelint resolves relative to the config file — from ~/.config/fast-cv
+  // that never reaches fast-cv's node_modules.
+  it('points --config-basedir at fast-cv for shipped configs', () => {
+    for (const configSource of ['package-default', 'user-default']) {
+      const { args } = stylelint.buildCommand('/tmp/project', '/etc/.stylelintrc.json', { configSource });
+      const idx = args.indexOf('--config-basedir');
+      assert.ok(idx >= 0, `expected --config-basedir for ${configSource}`);
+      assert.ok(args[idx + 1].length > 0);
+    }
+  });
+
+  it('omits --config-basedir for a project-local config', () => {
+    // A project's own config must keep resolving against its own dependencies.
+    const { args } = stylelint.buildCommand('/tmp/project', '/tmp/project/.stylelintrc.json', { configSource: 'local' });
+    assert.ok(!args.includes('--config-basedir'));
+  });
+
+  it('omits --config-basedir when there is no config', () => {
+    const { args } = stylelint.buildCommand('/tmp/project', null, { configSource: 'package-default' });
+    assert.ok(!args.includes('--config-basedir'));
+  });
+
   it('builds command with --fix flag', () => {
     const { args } = stylelint.buildCommand('/tmp/project', null, { fix: true });
     assert.ok(args.includes('--fix'));

@@ -1,7 +1,13 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const execFileAsync = promisify(execFile);
+
+// fast-cv's own package root — where the shipped configs' peer packages live.
+const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const FAST_CV_CONFIG_SOURCES = new Set(['package-default', 'user-default']);
 
 const FORMAT_RULES = /indentation|whitespace|empty-line|no-eol|no-missing-end-of-source-newline|no-extra-semicolons/;
 
@@ -40,9 +46,17 @@ export default {
   supportsFix: true,
   installHint: 'npm install -g stylelint stylelint-config-standard',
 
-  buildCommand(targetDir, configPath, { files = [], fix = false } = {}) {
+  buildCommand(targetDir, configPath, { files = [], fix = false, configSource = 'none' } = {}) {
     const args = ['--formatter', 'json', '--allow-empty-input'];
     if (configPath) args.push('--config', configPath);
+    // Our shipped config does `extends: "stylelint-config-standard"`, which
+    // stylelint resolves relative to the config file. From ~/.config/fast-cv
+    // that walk never reaches fast-cv's node_modules, so point it there
+    // explicitly. Only for our own configs — a project's local config must keep
+    // resolving against the project's own dependencies.
+    if (configPath && FAST_CV_CONFIG_SOURCES.has(configSource)) {
+      args.push('--config-basedir', PACKAGE_ROOT);
+    }
     if (fix) args.push('--fix');
     if (files.length > 0) {
       args.push(...files);
