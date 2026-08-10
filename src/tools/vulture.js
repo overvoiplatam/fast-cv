@@ -150,7 +150,8 @@ export default {
       throw new Error(`vulture error (exit ${exitCode}): ${stderr.slice(0, 500) || 'invalid input'}`);
     }
     if (!VULTURE_EXPECTED_EXITS.has(exitCode)) {
-      throw new Error(`vulture error (exit ${exitCode}): ${stderr.slice(0, 500) || `exit code ${exitCode}`}`);
+      const detail = stderr.slice(0, 500) || 'no diagnostic output';
+      throw new Error(`vulture error (exit ${exitCode}): ${detail}`);
     }
 
     return findings;
