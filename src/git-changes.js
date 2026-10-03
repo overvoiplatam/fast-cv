@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
-import { relative, resolve } from 'node:path';
+import { relative, resolve, sep } from 'node:path';
 
 function exec(cmd, args, cwd) {
   return new Promise((ok, fail) => {
@@ -46,21 +46,22 @@ async function resolveRepoRoot(canonicalTarget, originalTarget) {
 }
 
 async function collectUncommittedPaths(repoRoot, files) {
-  const porcelain = await exec('git', ['status', '--porcelain', '-uall'], repoRoot);
-  for (const line of porcelain.split('\n')) {
-    const path = extractPorcelainPath(line);
-    if (path) files.add(path);
+  // -z: NUL-separated records with raw (unquoted) paths, so spaces, unicode
+  // and ' -> ' inside filenames parse correctly. Record layout: `XY <path>`,
+  // plus a second record with the original path when XY contains R/C.
+  const porcelain = await exec('git', ['status', '--porcelain=v1', '-z', '-uall'], repoRoot);
+  const records = porcelain.split('\0');
+  for (let i = 0; i < records.length; i++) {
+    // `.at(i)` instead of `records[i]` to avoid detect-object-injection.
+    const entry = records.at(i);
+    if (entry.length < 4) continue; // trailing NUL / empty record
+    const xy = entry.slice(0, 2);
+    const path = entry.slice(3);
+    const isRenameOrCopy = xy.includes('R') || xy.includes('C');
+    if (isRenameOrCopy) i++; // skip the original-path record that follows
+    if (isDeletedStatus(xy)) continue;
+    files.add(path);
   }
-}
-
-function extractPorcelainPath(line) {
-  if (!line) return null;
-  const xy = line.slice(0, 2);
-  if (isDeletedStatus(xy)) return null;
-  const rest = line.slice(3);
-  // Handle renames: "R  old -> new"
-  const arrow = rest.indexOf(' -> ');
-  return arrow !== -1 ? rest.slice(arrow + 4) : rest;
 }
 
 function isDeletedStatus(xy) {
@@ -85,7 +86,10 @@ function relativizeToTarget(files, repoRoot, canonicalTarget) {
   for (const f of files) {
     const abs = resolve(repoRoot, f);
     const rel = relative(canonicalTarget, abs);
-    if (rel.startsWith('..')) continue;
+    // Out-of-target check is separator-aware: path.relative yields '..\\a.js'
+    // on Windows and '../a.js' on POSIX, but '..foo.js' is a legitimate
+    // in-target name that must not be discarded.
+    if (rel === '..' || rel.startsWith(`..${sep}`)) continue;
     result.push(rel);
   }
   result.sort();

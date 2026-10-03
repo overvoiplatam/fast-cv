@@ -58,29 +58,38 @@ describe('ruff adapter', () => {
     assert.ok(cmds[0].args.includes('--config'));
   });
 
+  // Shape produced by `ruff check --output-format json` (ruff 0.16.x):
+  // there is no `type` field — severity is the `severity` string.
+  const realItem = (overrides = {}) => ({
+    cell: null,
+    code: 'F401',
+    end_location: { column: 10, row: 1 },
+    filename: 'src/app.py',
+    fix: { applicability: 'safe', edits: [], message: 'Remove unused import' },
+    location: { column: 8, row: 1 },
+    message: '`os` imported but unused',
+    name: 'unused-import',
+    noqa_row: 1,
+    severity: 'error',
+    url: 'https://docs.astral.sh/ruff/rules/unused-import',
+    ...overrides,
+  });
+
   it('parses valid JSON output', () => {
     const stdout = JSON.stringify([
-      {
-        code: 'F401',
-        message: '`os` imported but unused',
-        filename: 'src/app.py',
-        location: { row: 1, column: 1 },
-        type: 'E',
-      },
-      {
+      realItem(),
+      realItem({
         code: 'E302',
         message: 'Expected 2 blank lines, found 1',
-        filename: 'src/app.py',
-        location: { row: 15, column: 1 },
-        type: 'W',
-      },
-      {
+        location: { column: 1, row: 15 },
+        severity: 'warning',
+      }),
+      realItem({
         code: 'S105',
         message: 'Possible hardcoded password',
         filename: 'src/auth.py',
-        location: { row: 42, column: 5 },
-        type: 'E',
-      },
+        location: { column: 5, row: 42 },
+      }),
     ]);
 
     const findings = ruff.parseOutput(stdout, '', 1);
@@ -94,6 +103,42 @@ describe('ruff adapter', () => {
 
     assert.equal(findings[1].tag, 'FORMAT');
     assert.equal(findings[2].tag, 'SECURITY');
+  });
+
+  it('maps the real `severity` field to finding severity', () => {
+    const stdout = JSON.stringify([
+      realItem({
+        code: 'E712',
+        message: 'Avoid equality comparisons to `True`; use `a` for truth checks',
+        name: 'true-false-comparison',
+        severity: 'error',
+      }),
+      realItem({ code: 'W291', name: 'trailing-whitespace', severity: 'warning' }),
+    ]);
+
+    const findings = ruff.parseOutput(stdout, '', 1);
+    assert.equal(findings.length, 2);
+    assert.equal(findings[0].severity, 'error');
+    assert.equal(findings[1].severity, 'warning');
+  });
+
+  it('never degrades SECURITY rules when severity is missing/note', () => {
+    const stdout = JSON.stringify([
+      realItem({ code: 'S101', name: 'assert', severity: undefined }),
+      realItem({ code: 'F401', severity: 'note' }),
+    ]);
+    const noSeverity = JSON.stringify([
+      { code: 'S101', message: 'Use of assert detected', filename: 'a.py', location: { row: 1, column: 1 } },
+      { code: 'F401', message: 'unused', filename: 'a.py', location: { row: 2, column: 1 } },
+    ]);
+
+    const withNote = ruff.parseOutput(stdout, '', 1);
+    assert.equal(withNote[0].severity, 'error', 'S-code stays an error');
+    assert.equal(withNote[1].severity, 'warning');
+
+    const findings = ruff.parseOutput(noSeverity, '', 1);
+    assert.equal(findings[0].severity, 'error', 'S-code stays an error');
+    assert.equal(findings[1].severity, 'warning');
   });
 
   it('returns empty array for clean output', () => {
@@ -118,7 +163,7 @@ describe('ruff adapter', () => {
   it('classifies rule codes correctly', () => {
     const make = (code) => JSON.stringify([{
       code, message: 'test', filename: 'f.py',
-      location: { row: 1, column: 1 }, type: 'E',
+      location: { row: 1, column: 1 }, severity: 'error',
     }]);
 
     assert.equal(ruff.parseOutput(make('S101'), '', 1)[0].tag, 'SECURITY');

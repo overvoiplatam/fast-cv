@@ -127,6 +127,41 @@ describe('runTools', () => {
     assert.ok(results[0].error.includes('Timeout'));
   });
 
+  // Uses node:test mock timers (no real waiting): the timeout fires via
+  // tick(), a real child process is killed for real, and process.kill is
+  // spied to assert no late SIGKILL is issued after close (PID-reuse risk).
+  it('timeout kills the child and never issues a late kill after close', async (t) => {
+    const killCalls = [];
+    const realKill = process.kill.bind(process);
+    process.kill = (...args) => { killCalls.push(args); return realKill(...args); };
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      const pending = runOne(
+        makeTool('hang-tool', {
+          buildCommand() { return { bin: 'node', args: ['-e', 'setTimeout(() => {}, 60000)'] }; },
+          parseOutput() { return []; },
+        }),
+        '/tmp',
+        { timeout: 1000 },
+      );
+      t.mock.timers.tick(1000); // fire the per-tool timeout → SIGTERM
+      const results = await pending;
+
+      assert.ok(results[0].error && results[0].error.includes('Timeout'));
+      assert.equal(killCalls.length, 1, 'exactly one SIGTERM');
+      assert.ok(killCalls[0][0] < 0, 'POSIX kill targets the process group (negative pid)');
+      assert.equal(killCalls[0][1], 'SIGTERM');
+
+      // The 5s SIGKILL escalation must have been cancelled by close: ticking
+      // past it must produce no further kill against a possibly-recycled PID.
+      t.mock.timers.tick(5000);
+      assert.equal(killCalls.length, 1, 'no late SIGKILL after close');
+    } finally {
+      t.mock.timers.reset();
+      process.kill = realKill;
+    }
+  });
+
   it('does not apply a timeout when none is configured', async () => {
     const results = await runTools(
       [{

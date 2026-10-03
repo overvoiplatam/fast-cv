@@ -1,6 +1,24 @@
 import { spawn } from 'node:child_process';
 import { inferToolErrorHint } from './tool-errors.js';
 
+// Timeout escape hatch. POSIX: signal the whole process group — the tool is
+// spawned detached (its own group) and tools like semgrep/bear spawn worker
+// children. Windows: kill(-pid) is unreliable for detached children there, so
+// signal the child itself directly (grandchildren may survive — acceptable).
+// ESRCH (group already gone) is swallowed: the child may exit between the
+// timeout and the kill. PID-reuse risk — signalling a recycled PGID after our
+// child died — is mitigated by clearing both timeout timers on close/error, so
+// no kill is ever issued once our child has exited.
+function killTree(proc, signal) {
+  if (process.platform === 'win32') {
+    try { proc.kill(signal); } catch { /* already dead */ }
+    return;
+  }
+  try {
+    process.kill(-proc.pid, signal);
+  } catch { /* ESRCH: group already gone */ }
+}
+
 function spawnAndCollect(bin, args, opts) {
   return new Promise((resolve) => {
     let stdout = '';
@@ -19,24 +37,31 @@ function spawnAndCollect(bin, args, opts) {
     proc.stderr.on('data', (chunk) => { stderr += chunk; });
 
     let killed = false;
+    let sigkillTimer = null;
     const timer = hasTimeout
       ? setTimeout(() => {
         killed = true;
         // Kill the entire process group (bearer, semgrep, etc. spawn workers)
-        try { process.kill(-proc.pid, 'SIGTERM'); } catch { /* already dead */ }
-        setTimeout(() => {
-          try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already dead */ }
-        }, 5000);
+        killTree(proc, 'SIGTERM');
+        // Escalate to SIGKILL only if the child is still alive 5s later.
+        // sigkillTimer is cleared alongside `timer` on close/error so it can
+        // never fire against a recycled PID after our child has exited.
+        sigkillTimer = setTimeout(() => killTree(proc, 'SIGKILL'), 5000);
       }, opts.timeout)
       : null;
 
-    proc.on('close', (exitCode) => {
+    const clearTimers = () => {
       if (timer) clearTimeout(timer);
+      if (sigkillTimer) clearTimeout(sigkillTimer);
+    };
+
+    proc.on('close', (exitCode) => {
+      clearTimers();
       resolve({ stdout, stderr, exitCode, killed });
     });
 
     proc.on('error', (err) => {
-      if (timer) clearTimeout(timer);
+      clearTimers();
       resolve({ stdout: '', stderr: err.message, exitCode: -1, killed: false, spawnError: err });
     });
   });

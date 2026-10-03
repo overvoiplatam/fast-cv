@@ -82,6 +82,53 @@ describe('semgrep adapter', () => {
     );
   });
 
+  it('throws on exit 1 with empty stdout and a stderr message', () => {
+    // e.g. `--config auto` failed on a network/config error: exit 1 with no
+    // JSON on stdout. Returning [] here would be a false clean.
+    assert.throws(
+      () => semgrep.parseOutput('', 'network error', 1),
+      /semgrep error: network error/
+    );
+  });
+
+  it('throws on exit 1 with JSON lacking a results block and a stderr message', () => {
+    assert.throws(
+      () => semgrep.parseOutput(JSON.stringify({ errors: [{ message: 'boom' }] }), 'config failed', 1),
+      /semgrep error: config failed/
+    );
+  });
+
+  it('throws on exit 1 with a null results block and a stderr message', () => {
+    // `{"results": null}` must not pass as a scanable block: `|| []` would
+    // otherwise turn degraded output into a silent clean scan.
+    assert.throws(
+      () => semgrep.parseOutput(JSON.stringify({ results: null }), 'degraded run', 1),
+      /semgrep error: degraded run/
+    );
+  });
+
+  it('parses findings on exit 1 with a valid results stdout', () => {
+    const stdout = JSON.stringify({
+      results: [
+        {
+          check_id: 'python.lang.security.audit.exec-detected',
+          path: 'src/app.py',
+          start: { line: 42, col: 1 },
+          extra: {
+            message: 'Detected use of exec()',
+            severity: 'ERROR',
+            metadata: { category: 'security', impact: 'HIGH' },
+          },
+        },
+      ],
+      errors: [{ message: 'partial scan error' }],
+    });
+
+    const findings = semgrep.parseOutput(stdout, 'partial scan errors', 1);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].rule, 'python.lang.security.audit.exec-detected');
+  });
+
   it('returns empty for empty stdout with exit 0', () => {
     const findings = semgrep.parseOutput('', '', 0);
     assert.equal(findings.length, 0);

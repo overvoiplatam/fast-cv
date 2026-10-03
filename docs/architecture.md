@@ -1,6 +1,6 @@
 # Architecture
 
-Node.js ESM CLI that orchestrates linters and security scanners sequentially, outputting unified Markdown or SARIF reports. Zero build step, 3 runtime dependencies.
+Node.js ESM CLI that orchestrates linters and security scanners sequentially, outputting unified Markdown, SARIF or JSON reports. Zero build step, 3 runtime dependencies.
 
 ## File Map
 
@@ -14,6 +14,7 @@ Node.js ESM CLI that orchestrates linters and security scanners sequentially, ou
 | `src/runner.js` | Sequential tool execution with optional timeout + verbose progress |
 | `src/normalizer.js` | Markdown report formatting + post-filter |
 | `src/sarif.js` | SARIF 2.1.0 output formatting |
+| `src/report-json.js` | Compact JSON output formatting (agent consumption) |
 | `src/findings.js` | Shared finding collection helper |
 | `src/constants.js` | Shared constants and JSON Lines parser |
 | `src/line-check.js` | Built-in file length checker |
@@ -57,8 +58,8 @@ src/index.js
 7. **Sequential Run** — Run tools one at a time with optional timeout + verbose progress
 8. **Line-Check** (L160-164) — Built-in file length checker
 9. **Post-Filter** (L166-167) — Strip findings from ignored/excluded files
-10. **Docstring Filter** (L169-173) — Suppress DOCS findings if `--no-docstring`
-11. **Format + Output** (L175-181) — Generate Markdown or SARIF report, write to stdout
+10. **Docstring + Severity Filter** (L169-173) — Suppress DOCS findings if `--no-docstring`, then drop findings below `--min-severity` (last filter before the exit code)
+11. **Format + Output** (L175-181) — Generate Markdown, SARIF or JSON report, write to stdout
 12. **Exit Code** — 0=clean, 1=findings, 2=validation/tool failure
 
 ## Data Flow
@@ -84,8 +85,8 @@ src/index.js
                 └─────────────┘
                       │
                 ┌─────────────┐
-                │ normalizer  │──> Markdown or SARIF string
-                │  / sarif    │
+                │ normalizer  │──> Markdown, SARIF or JSON string
+                │ /sarif/json │
                 └─────────────┘
                       │
                    stdout

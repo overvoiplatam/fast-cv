@@ -189,9 +189,10 @@ visible rather than silently inflating the results.
 | `--sbom` | `false` | Generate CycloneDX SBOM (trivy, early exit) |
 | `--max-lines <number>` | `600` | Flag files exceeding this line count (0 to disable) |
 | `--max-lines-omit <patterns>` | — | Comma-separated patterns to exclude from line count check |
-| `--git-only [scope]` | `false` | Scan only git-changed files (`--git-only` = uncommitted+unpushed, `--git-only=uncommitted` = working tree only) |
+| `--git-only [scope]` | `false` | Scan only git-changed files (`--git-only` = uncommitted working tree, `--git-only=all` = also unpushed commits) |
 | `--no-docstring` | `false` | Suppress documentation findings (DOCS tag) |
-| `-f, --format <type>` | `markdown` | Output format: `markdown` or `sarif` |
+| `-f, --format <type>` | `markdown` | Output format: `markdown`, `sarif` or `json` (compact, machine-readable) |
+| `--min-severity <level>` | `warning` | Lowest severity to report (`error` hides warnings; exit code follows) |
 
 ### Fix Safety
 

@@ -37,19 +37,34 @@ export function filterFindings(results, targetDir, ignoreFilter, onlyFilter, { v
   });
 }
 
-export function formatReport({ targetDir, results, warnings = [], fix = false, fileCount = 0 }) {
+/**
+ * Drops findings below `minSeverity`. Only two levels exist today, so
+ * 'warning' (the default) keeps everything and 'error' drops warnings.
+ * Mutates each result in place — same contract as stripDocsFindings — so the
+ * filtered array stays identical for the exit code and for every formatter.
+ * @returns {object[]} the same results array
+ */
+export function applyMinSeverity(results, minSeverity) {
+  if (minSeverity !== 'error') return results;
+  for (const r of results) {
+    if (r.findings) r.findings = r.findings.filter(f => f.severity === 'error');
+  }
+  return results;
+}
+
+export function formatReport({ targetDir, results, warnings = [], fix = false, fileCount = 0, minSeverity }) {
   const toolErrors = results.filter(r => r.error);
   const allFindings = collectFindings(results, targetDir);
 
   const sections = [
-    renderHeader({ targetDir, results, fileCount, fix }),
+    renderHeader({ targetDir, results, fileCount, fix, minSeverity }),
     renderBody({ allFindings, toolErrors, warnings }),
     renderFooter({ results, toolErrors, allFindings, fileCount }),
   ];
   return sections.join('\n');
 }
 
-function renderHeader({ targetDir, results, fileCount, fix }) {
+function renderHeader({ targetDir, results, fileCount, fix, minSeverity }) {
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   const toolSummaries = results
     .filter(r => !r.error)
@@ -59,6 +74,7 @@ function renderHeader({ targetDir, results, fileCount, fix }) {
   if (fileCount > 0) lines.push(`**Files**: ${fileCount}`);
   if (toolSummaries.length > 0) lines.push(`**Tools**: ${toolSummaries.join(', ')}`);
   if (fix) lines.push('**Mode**: fix');
+  if (minSeverity && minSeverity !== 'warning') lines.push(`**Min severity**: ${minSeverity}`);
   lines.push('', '---', '');
   return lines.join('\n');
 }

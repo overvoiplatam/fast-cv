@@ -38,7 +38,7 @@ node bin/fast-cv.js --update-db --tools=trivy .
 ```bash
 node bin/fast-cv.js --fix .                    # run only fixers, apply fixes, exit 0
 node bin/fast-cv.js --tools=eslint --fix .     # fix eslint only
-node bin/fast-cv.js --fix --git-only .         # fix only git-changed files
+node bin/fast-cv.js --fix --git-only .         # fix only uncommitted git-changed files (--git-only=all adds unpushed)
 ```
 
 **Note:** `--fix` runs only fix-capable tools (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff, docspec, spectral, markdownlint), applies fixes, outputs a summary to stderr, and exits 0 when fix tools complete. Tool execution errors exit 2. No findings report is generated. With shipped default configs, `--fix` only applies formatting changes (safe). Full semantic fix requires a local project config.
@@ -49,11 +49,25 @@ node bin/fast-cv.js --fix --git-only .         # fix only git-changed files
 node bin/fast-cv.js --no-docstring .           # hide DOCS tag findings
 ```
 
+### Minimum severity
+
+```bash
+node bin/fast-cv.js --min-severity error .     # hide warnings; exit code follows the filter
+```
+
 ### SARIF output
 
 ```bash
 node bin/fast-cv.js --format sarif . > report.sarif
 ```
+
+### JSON output
+
+```bash
+node bin/fast-cv.js --format json .            # compact report for agents/scripts
+```
+
+Top-level keys: `target`, `summary` (`files`, `tools`, `findings`, `errors`, plus `minSeverity` when `--min-severity error` is active), `findings`, `toolErrors`, `warnings`. Each finding is `{tool, file, line, col?, tag, rule, severity, message}` — `col` is omitted when the tool did not report one.
 
 ## Understanding Output
 
@@ -84,7 +98,7 @@ node bin/fast-cv.js --format sarif . > report.sarif
 fast-cv is a JS project. The relevant self-scan is:
 
 ```bash
-node bin/fast-cv.js --tools=eslint .
+node bin/fast-cv.js --tools=eslint --max-lines-omit install.sh .
 ```
 
 This should always exit 0 on the main branch. Run it after any code changes.

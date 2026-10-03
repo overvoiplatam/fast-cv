@@ -34,19 +34,34 @@ export default {
 
   parseOutput(stdout, stderr, exitCode) {
     // semgrep exits: 0 = clean or findings, 1 = findings with errors, 2+ = fatal
-    if (!stdout.trim()) {
-      if (exitCode >= 2) {
-        throw new Error(`semgrep error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
-      }
-      return [];
+    const out = stdout.trim();
+    const err = (stderr || '').trim();
+
+    if (!out && exitCode >= 2) {
+      throw new Error(`semgrep error (exit ${exitCode}): ${stderr.slice(0, 500)}`);
     }
 
-    let data;
-    try {
-      data = JSON.parse(stdout);
-    } catch {
-      throw new Error(`semgrep: failed to parse JSON output: ${stdout.slice(0, 200)}`);
+    let data = null;
+    if (out) {
+      try {
+        data = JSON.parse(stdout);
+      } catch {
+        throw new Error(`semgrep: failed to parse JSON output: ${stdout.slice(0, 200)}`);
+      }
     }
+
+    // A non-zero exit with no parseable `results` block plus a stderr message is
+    // a real failure (e.g. `--config auto` network/config error), not a clean
+    // scan — returning [] here would be a false clean. Exit 1 with a `results`
+    // block is normal (findings) and parses below. The block must be an array:
+    // a degraded `{"results": null}` on a failing exit is still an error, and
+    // `data.results || []` would otherwise turn it into a silent clean scan.
+    const hasResults = Array.isArray(data?.results);
+    if (exitCode !== 0 && !hasResults && err) {
+      throw new Error(`semgrep error: ${stderr.slice(0, 200)}`);
+    }
+
+    if (!data) return [];
 
     const results = data.results || [];
     return results.map(item => ({

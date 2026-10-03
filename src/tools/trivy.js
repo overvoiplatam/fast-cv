@@ -67,7 +67,7 @@ function secretFinding(target, secret) {
     tag: 'SECRET',
     rule: secret.RuleID || 'secret',
     severity: 'error',
-    message: `${secret.Category}: ${secret.Title} (match: ${secret.Match?.slice(0, 30)}...)`,
+    message: `${secret.Category}: ${secret.Title} (match: ${secret.Match?.slice(0, 30) ?? 'n/a'}...)`,
   };
 }
 

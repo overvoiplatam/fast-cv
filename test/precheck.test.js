@@ -107,4 +107,63 @@ describe('precheck', () => {
     assert.equal(result.ok, false);
     assert.equal(result.tools.length, 0);
   });
+
+  // installHint values below are real executables so tryAutoInstall actually
+  // runs (and, for `false`, actually fails) without touching the network.
+  it('fails when auto-install leaves every tool unready', async () => {
+    const tools = [{
+      name: 'ruff',
+      extensions: ['.py'],
+      installHint: '/usr/bin/true',
+      checkInstalled: async () => ({ ok: false, reason: 'unsupported' }),
+    }];
+
+    const result = await precheck(tools, { autoInstall: true });
+    assert.equal(result.ok, false, 'no ready tool after auto-install must not be a false clean');
+    assert.equal(result.tools.length, 0);
+    assert.ok(result.message, 'failure carries a message');
+    assert.ok(result.message.includes('unsupported'));
+    assert.ok(result.warnings.some(w => w.includes('auto-install failed')));
+  });
+
+  it('does not count a { ok: false } post-install check as installed', async () => {
+    let calls = 0;
+    const tool = {
+      name: 'eslint',
+      extensions: ['.js'],
+      installHint: '/usr/bin/true',
+      checkInstalled: async () => {
+        calls += 1;
+        // First call (partition): missing. Second call (after install):
+        // present but unusable — must not be counted as installed.
+        return calls === 1 ? false : { ok: false, reason: 'unsupported' };
+      },
+    };
+
+    const result = await precheck([tool], { autoInstall: true });
+    assert.ok(calls >= 2, 'the install path re-checks the tool');
+    assert.equal(result.tools.length, 0, 'truthy { ok: false } object must not be treated as installed');
+    assert.equal(result.ok, false);
+  });
+
+  it('stays ok when auto-install recovers at least one tool', async () => {
+    let ruffChecks = 0;
+    const ruffTool = {
+      name: 'ruff',
+      extensions: ['.py'],
+      installHint: '/usr/bin/true',
+      checkInstalled: async () => (ruffChecks++ === 0 ? false : true),
+    };
+    const knipTool = {
+      name: 'knip',
+      extensions: ['.js'],
+      installHint: '/usr/bin/false',
+      checkInstalled: async () => false,
+    };
+
+    const result = await precheck([ruffTool, knipTool], { autoInstall: true });
+    assert.equal(result.ok, true, 'one ready tool is enough to proceed');
+    assert.deepEqual(result.tools.map(t => t.name), ['ruff']);
+    assert.ok(result.warnings.some(w => w.includes('knip') && w.includes('auto-install failed')));
+  });
 });

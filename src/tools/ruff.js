@@ -19,10 +19,20 @@ function classifyRule(code) {
   return 'LINTER';
 }
 
-function mapSeverity(ruffSeverity) {
-  // ruff JSON uses "E" for error, "W" for warning in the type field
-  // but the main signal is the rule code
-  return ruffSeverity === 'E' ? 'error' : 'warning';
+// Maps an item's severity to the CLI's two levels.
+// Modern ruff (>= 0.5) emits `severity` as a string ("error" | "warning" | ...);
+// older JSON used a `type` field ("E" | "W"); callers pass the preferred field
+// already resolved (`item.severity ?? item.type`).
+// - explicit "error" (or legacy "E") -> 'error'
+// - explicit "warning" (or legacy "W") -> 'warning'
+// - "note"/unknown/missing -> never downgrade high-risk rules: SECURITY
+//   findings (S-codes, per classifyRule) stay 'error'; everything else is a
+//   'warning' (this CLI has no "note" level, so we never emit one).
+function mapSeverity(rawSeverity, tag) {
+  const value = typeof rawSeverity === 'string' ? rawSeverity.toLowerCase() : '';
+  if (value === 'error' || value === 'e') return 'error';
+  if (value === 'warning' || value === 'w') return 'warning';
+  return tag === 'SECURITY' ? 'error' : 'warning';
 }
 
 export default {
@@ -73,15 +83,18 @@ export default {
       throw new Error(`ruff: failed to parse JSON output: ${stdout.slice(0, 200)}`);
     }
 
-    return results.map(item => ({
-      file: item.filename,
-      line: item.location?.row ?? item.location?.line ?? 0,
-      col: item.location?.column ?? item.location?.col ?? undefined,
-      tag: classifyRule(item.code),
-      rule: item.code || 'unknown',
-      severity: mapSeverity(item.type),
-      message: item.message,
-    }));
+    return results.map(item => {
+      const tag = classifyRule(item.code);
+      return {
+        file: item.filename,
+        line: item.location?.row ?? item.location?.line ?? 0,
+        col: item.location?.column ?? item.location?.col ?? undefined,
+        tag,
+        rule: item.code || 'unknown',
+        severity: mapSeverity(item.severity ?? item.type, tag),
+        message: item.message,
+      };
+    });
   },
 
   async checkInstalled() {

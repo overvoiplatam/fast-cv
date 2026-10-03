@@ -83,3 +83,77 @@ describe('CLI flag surface', () => {
     assert.doesNotMatch(flat, /per-tool timeout in seconds \(default: "?120"?\)/);
   });
 });
+
+// No pre-existing pattern for asserting invalid-flag handling, so this spawns
+// the real bin (same approach as the tests above) and checks exit code 2.
+describe('CLI flag validation', () => {
+  let emptyDir;
+
+  beforeEach(async () => {
+    emptyDir = await mkdtemp(join(tmpdir(), 'fcv-flags-'));
+  });
+  afterEach(async () => {
+    await rm(emptyDir, { recursive: true, force: true });
+  });
+
+  function runCli(args) {
+    try {
+      const stdout = execFileSync('node', [binPath, ...args], { encoding: 'utf-8' });
+      return { status: 0, stderr: '', stdout };
+    } catch (err) {
+      return { status: err.status, stderr: String(err.stderr || ''), stdout: String(err.stdout || '') };
+    }
+  }
+
+  it('rejects non-numeric --max-lines with exit code 2 and a clear message', () => {
+    const { status, stderr } = runCli(['--max-lines', 'abc', emptyDir]);
+    assert.equal(status, 2);
+    assert.match(stderr, /invalid --max-lines value: abc/);
+    assert.doesNotMatch(stderr, /NaN/);
+  });
+
+  it('rejects non-integer --max-lines values', () => {
+    const { status, stderr } = runCli(['--max-lines', '1.5', emptyDir]);
+    assert.equal(status, 2);
+    assert.match(stderr, /invalid --max-lines value/);
+  });
+
+  it('accepts --max-lines 0 (documented disable value)', () => {
+    // An empty dir short-circuits to "No scannable files found" (exit 0):
+    // reaching that point proves 0 passed validation.
+    const { status, stderr } = runCli(['--max-lines', '0', emptyDir]);
+    assert.doesNotMatch(stderr, /invalid --max-lines/);
+    assert.equal(status, 0, stderr);
+  });
+
+  it('rejects an invalid --git-only scope with exit code 2 and a clear message', () => {
+    const { status, stderr } = runCli(['--git-only=bogus', emptyDir]);
+    assert.equal(status, 2);
+    assert.match(stderr, /invalid --git-only scope: bogus/);
+    assert.match(stderr, /expected 'uncommitted' or 'all'/);
+  });
+
+  it('writes a parseable JSON report for --format json', () => {
+    const { status, stdout } = runCli(['--format', 'json', emptyDir]);
+    assert.equal(status, 0);
+    const parsed = JSON.parse(stdout);
+    assert.equal(typeof parsed.target, 'string');
+    assert.ok(parsed.summary && Array.isArray(parsed.summary.tools));
+    assert.ok(Array.isArray(parsed.findings));
+    assert.ok(Array.isArray(parsed.toolErrors));
+    assert.ok(Array.isArray(parsed.warnings));
+    assert.ok(!('minSeverity' in parsed.summary));
+  });
+
+  it('surfaces the active --min-severity filter in the JSON summary', () => {
+    const { status, stdout } = runCli(['--format', 'json', '--min-severity', 'error', emptyDir]);
+    assert.equal(status, 0);
+    assert.equal(JSON.parse(stdout).summary.minSeverity, 'error');
+  });
+
+  it('adds a Min severity line to the markdown report when the filter is active', () => {
+    const { status, stdout } = runCli(['--min-severity', 'error', emptyDir]);
+    assert.equal(status, 0);
+    assert.match(stdout, /\*\*Min severity\*\*: error/);
+  });
+});

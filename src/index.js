@@ -5,8 +5,9 @@ import { pruneDirectory } from './pruner.js';
 import { precheck } from './precheck.js';
 import { resolveConfig } from './config-resolver.js';
 import { runTools } from './runner.js';
-import { formatReport, filterFindings } from './normalizer.js';
+import { formatReport, filterFindings, applyMinSeverity } from './normalizer.js';
 import { formatSarif } from './sarif.js';
+import { formatJsonReport } from './report-json.js';
 import { tools as allTools } from './tools/index.js';
 import { checkFileLines } from './line-check.js';
 import { getGitChangedFiles } from './git-changes.js';
@@ -48,8 +49,9 @@ function configureScanCommand(program) {
     .option('--max-lines <number>', 'flag files exceeding this line count (0 to disable)', '600')
     .option('--max-lines-omit <patterns>', 'comma-separated patterns to exclude from line count check (gitignore syntax)', '')
     .option('--no-docstring', 'suppress documentation findings (DOCS tag)', false)
-    .option('--git-only [scope]', 'scan only git-changed files (default: uncommitted+unpushed; use --git-only=uncommitted for uncommitted only)', false)
-    .addOption(new Option('-f, --format <type>', 'output format').choices(['markdown', 'sarif']).default('markdown'))
+    .option('--git-only [scope]', 'scan only git-changed files (default: uncommitted; use --git-only=all to include unpushed commits)', false)
+    .addOption(new Option('-f, --format <type>', 'output format').choices(['markdown', 'sarif', 'json']).default('markdown'))
+    .addOption(new Option('--min-severity <level>', 'lowest severity to report (error: hide warnings)').choices(['error', 'warning']).default('warning'))
     .action(executeScanAction);
 }
 
@@ -109,11 +111,23 @@ function parseScanOptions(options) {
     fix: options.fix,
     licenses: options.licenses,
     updateDb: options.updateDb,
-    maxLines: parseInt(options.maxLines, 10),
+    maxLines: parseMaxLines(options.maxLines),
     maxLinesOmit: splitCsv(options.maxLinesOmit),
-    fmt: options.format === 'sarif' ? formatSarif : formatReport,
+    fmt: options.format === 'sarif' ? formatSarif : options.format === 'json' ? formatJsonReport : formatReport,
     noDocstring: options.noDocstring,
+    minSeverity: options.minSeverity || 'warning',
   };
+}
+
+// parseInt('abc') is NaN, which would silently disable the line check.
+// The flag is always present (default '600'), so validate whatever value
+// commander hands us; '0' remains the documented "disable" value.
+function parseMaxLines(value) {
+  if (!/^\d+$/.test(String(value))) {
+    process.stderr.write(`Error: invalid --max-lines value: ${value} (expected a non-negative integer, 0 to disable)\n`);
+    process.exit(EXIT_PRECHECK_FAILED);
+  }
+  return parseInt(value, 10);
 }
 
 function splitCsv(value) {
@@ -121,9 +135,19 @@ function splitCsv(value) {
   return value.split(',').map(s => s.trim()).filter(Boolean);
 }
 
+// Same failure style as parseMaxLines: a bad flag value is a usage error,
+// not a findings run, so it exits 2 with the accepted values spelled out.
+// Bare `--git-only` (commander hands us `true`) scans the working tree only.
+function parseGitOnlyScope(value) {
+  if (value === true || value === 'uncommitted') return 'uncommitted';
+  if (value === 'all') return 'all';
+  process.stderr.write(`Error: invalid --git-only scope: ${value} (expected 'uncommitted' or 'all')\n`);
+  process.exit(EXIT_PRECHECK_FAILED);
+}
+
 async function resolveGitOnlyFiles(targetDir, options, parsed) {
   if (options.gitOnly === false) return null;
-  const scope = (options.gitOnly === true || options.gitOnly === 'all') ? 'all' : 'uncommitted';
+  const scope = parseGitOnlyScope(options.gitOnly);
   let gitFiles;
   try {
     gitFiles = await getGitChangedFiles(targetDir, scope);
@@ -149,6 +173,7 @@ function handleNoGitChanges(targetDir, parsed) {
     targetDir,
     results: [],
     warnings: ['No git-changed files found (clean working tree).'],
+    minSeverity: parsed.minSeverity,
   }));
   process.exit(EXIT_CLEAN);
 }
@@ -176,6 +201,7 @@ function handleNoScannableFiles(targetDir, parsed) {
   process.stdout.write(parsed.fmt({
     targetDir, results: [],
     warnings: ['No scannable files found.'],
+    minSeverity: parsed.minSeverity,
   }));
   process.exit(EXIT_CLEAN);
 }
@@ -205,6 +231,7 @@ function exitForNoApplicableTools(parsed, targetDir) {
   process.stdout.write(parsed.fmt({
     targetDir, results: [],
     warnings: ['No applicable tools for detected languages.'],
+    minSeverity: parsed.minSeverity,
   }));
   process.exit(EXIT_CLEAN);
 }
@@ -270,10 +297,14 @@ async function runScanFlow(precheckResult, targetDir, parsed, prune) {
     verbose: parsed.verbose,
   });
   if (parsed.noDocstring) stripDocsFindings(filtered);
+  // Last filter before the exit code and the report are computed, so both
+  // agree on what a "finding" is once --min-severity is in play.
+  applyMinSeverity(filtered, parsed.minSeverity);
 
   const warnings = [...(prune.warnings || []), ...(precheckResult.warnings || [])];
   process.stdout.write(parsed.fmt({
     targetDir, results: filtered, warnings, fileCount: prune.files.length,
+    minSeverity: parsed.minSeverity,
   }));
   process.exit(getScanExitCode(filtered));
 }

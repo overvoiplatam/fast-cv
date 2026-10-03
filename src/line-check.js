@@ -24,7 +24,11 @@ export async function checkFileLines(files, targetDir, { maxLines = 600, omitPat
       continue;
     }
 
-    const lineCount = content.split('\n').length;
+    // split('\n') yields a trailing '' for the final newline — that empty
+    // entry is not an extra line (and CRLF files keep their \r, harmless here).
+    const lines = content.split('\n');
+    if (lines.length > 1 && lines.at(-1) === '') lines.pop();
+    const lineCount = lines.length;
     if (lineCount > maxLines) {
       findings.push({
         file,

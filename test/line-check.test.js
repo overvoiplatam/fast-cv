@@ -11,8 +11,9 @@ async function makeTmpDir() {
   return dir;
 }
 
-async function writeLines(dir, name, count) {
-  const content = Array.from({ length: count }, (_, i) => `line ${i + 1}`).join('\n');
+async function writeLines(dir, name, count, { finalNewline = false } = {}) {
+  const lines = Array.from({ length: count }, (_, i) => `line ${i + 1}`);
+  const content = lines.join('\n') + (finalNewline ? '\n' : '');
   await writeFile(join(dir, name), content, 'utf-8');
 }
 
@@ -49,6 +50,41 @@ describe('checkFileLines', () => {
       assert.equal(f.severity, 'warning');
       assert.ok(f.message.includes('700 lines'));
       assert.ok(f.message.includes('limit: 600'));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not count the trailing newline as an extra line (600 lines + \\n = at limit)', async () => {
+    const dir = await makeTmpDir();
+    try {
+      await writeLines(dir, 'exact.js', 600, { finalNewline: true });
+      const result = await checkFileLines(['exact.js'], dir, { maxLines: 600 });
+      assert.equal(result.findings.length, 0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('flags a 601-line file ending with a newline', async () => {
+    const dir = await makeTmpDir();
+    try {
+      await writeLines(dir, 'over.js', 601, { finalNewline: true });
+      const result = await checkFileLines(['over.js'], dir, { maxLines: 600 });
+      assert.equal(result.findings.length, 1);
+      assert.equal(result.findings[0].line, 601);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('counts CRLF files without double counting', async () => {
+    const dir = await makeTmpDir();
+    try {
+      const content = Array.from({ length: 600 }, (_, i) => `line ${i + 1}`).join('\r\n') + '\r\n';
+      await writeFile(join(dir, 'crlf.js'), content, 'utf-8');
+      const result = await checkFileLines(['crlf.js'], dir, { maxLines: 600 });
+      assert.equal(result.findings.length, 0);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

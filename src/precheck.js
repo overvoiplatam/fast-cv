@@ -35,6 +35,14 @@ export async function precheck(tools, options = {}) {
 
   if (autoInstall) {
     await runAutoInstall(missing, ready, warnings, verbose);
+    if (ready.length === 0) {
+      // Every applicable tool is still missing after the auto-install attempts:
+      // failing the run beats reporting a false clean (exit 0 with nothing scanned).
+      const installNotes = warnings.length > 0
+        ? `\nAuto-install attempts:\n${warnings.map(w => `  ${w}`).join('\n')}\n`
+        : '';
+      return { ok: false, tools: ready, warnings, message: buildMissingMessage(missing) + installNotes };
+    }
     return { ok: true, tools: ready, warnings };
   }
 
@@ -79,7 +87,17 @@ async function partitionByInstalled(tools) {
 
 async function runAutoInstall(missing, ready, warnings, verbose) {
   for (const { tool } of missing) {
-    const installed = await tryAutoInstall(tool, verbose) && await tool.checkInstalled();
+    // Post-install check goes through normalizeCheck: checkInstalled may return
+    // `{ ok: false, reason }` (eslint does) and raw truthiness would count that
+    // object as an installed tool — a false clean.
+    let installed = false;
+    if (await tryAutoInstall(tool, verbose)) {
+      try {
+        installed = normalizeCheck(await tool.checkInstalled()).installed;
+      } catch {
+        installed = false;
+      }
+    }
     if (installed) {
       ready.push(tool);
       warnings.push(`${tool.name}: auto-installed successfully`);

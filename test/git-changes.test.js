@@ -70,6 +70,35 @@ describe('getGitChangedFiles', () => {
     assert.ok(!files.includes('b.js'));
   });
 
+  it('detects untracked files with spaces in the path', async () => {
+    await writeFile(join(repo, 'hello world.md'), 'x');
+    const files = await getGitChangedFiles(repo);
+    assert.ok(files.includes('hello world.md'));
+  });
+
+  it('detects untracked files with unicode in the path (no C-quote escaping)', async () => {
+    await writeFile(join(repo, 'café.md'), 'x');
+    const files = await getGitChangedFiles(repo);
+    assert.ok(files.includes('café.md'));
+    assert.ok(!files.some(f => f.includes('\\303') || f.startsWith('"')));
+  });
+
+  it('parses renames whose destination contains spaces (porcelain -z)', async () => {
+    await writeFile(join(repo, 'old.md'), 'x');
+    git(['add', 'old.md'], repo);
+    git(['commit', '-m', 'add old'], repo);
+    git(['mv', 'old.md', 'new.md con espacios'], repo);
+    const files = await getGitChangedFiles(repo);
+    assert.ok(files.includes('new.md con espacios'), `missing rename dest, got: ${files.join(', ')}`);
+    assert.ok(!files.includes('old.md'));
+  });
+
+  it('keeps relative paths that merely start with dots (..foo.txt)', async () => {
+    await writeFile(join(repo, '..foo.txt'), 'x');
+    const files = await getGitChangedFiles(repo);
+    assert.ok(files.includes('..foo.txt'));
+  });
+
   it('deduplicates files', async () => {
     // Modify and stage the same file — appears in both staged and unstaged
     await writeFile(join(repo, 'a.js'), 'changed');

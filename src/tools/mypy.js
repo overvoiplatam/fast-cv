@@ -1,21 +1,34 @@
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { parseJsonLines } from '../constants.js';
 
 const execFileAsync = promisify(execFile);
 
-// mypy ≥ 1.11 (June 2024) added `--output json`. Older versions reject it,
-// so we detect support once during checkInstalled and branch accordingly.
+// mypy ≥ 1.11 (June 2024) added `--output json`. Older versions reject it, so
+// support must never be latched module-wide: a value resolved for one scan
+// could otherwise leak into a later `buildCommand()` that runs without a
+// preceding `checkInstalled()`. Resolution is per invocation instead —
+// `buildCommand()` detects fresh (one `mypy --version`, once per scan, never
+// per file) and `parseOutput()` reuses what that build resolved. Tests pin a
+// value through the hook below, which short-circuits detection entirely.
+let jsonSupportOverride = null;
 let supportsJsonOutput = false;
 
-async function detectJsonSupport() {
+function parseVersionSupport(stdout) {
+  const m = String(stdout).match(/mypy (\d+)\.(\d+)/);
+  if (!m) return false;
+  const major = Number(m[1]);
+  const minor = Number(m[2]);
+  return major > 1 || (major === 1 && minor >= 11);
+}
+
+// Synchronous on purpose: buildCommand() is sync, and a mypy that is about to
+// run anyway makes the one extra `--version` spawn (≤ a few ms per scan) the
+// cheapest way to keep the flag honest. Failure degrades to text mode, which
+// every mypy version understands.
+function detectJsonSupport() {
   try {
-    const { stdout } = await execFileAsync('mypy', ['--version']);
-    const m = stdout.match(/mypy (\d+)\.(\d+)/);
-    if (!m) return false;
-    const major = Number(m[1]);
-    const minor = Number(m[2]);
-    return major > 1 || (major === 1 && minor >= 11);
+    return parseVersionSupport(execFileSync('mypy', ['--version'], { encoding: 'utf-8' }));
   } catch {
     return false;
   }
@@ -136,6 +149,8 @@ export default {
   installHint: 'pipx install mypy  (or: pip3 install --user mypy)',
 
   buildCommand(targetDir, configPath, { files = [] } = {}) {
+    // Resolve for this invocation; the test override wins so tests never spawn.
+    supportsJsonOutput = jsonSupportOverride ?? detectJsonSupport();
     const args = ['--no-error-summary'];
     if (supportsJsonOutput) args.unshift('--output', 'json');
     if (configPath) args.push('--config-file', configPath);
@@ -155,7 +170,7 @@ export default {
       return [];
     }
 
-    if (supportsJsonOutput) {
+    if (jsonSupportOverride ?? supportsJsonOutput) {
       return parseJsonLines(stdout)
         .filter(item => item.severity === 'error')
         .map(findingFromJsonItem);
@@ -170,9 +185,10 @@ export default {
   },
 
   async checkInstalled() {
+    // Presence check only: command/parse branches are resolved by buildCommand
+    // so a value latched here can never outlive the invocation that used it.
     try {
       await execFileAsync('mypy', ['--version']);
-      supportsJsonOutput = await detectJsonSupport();
       return true;
     } catch {
       return false;
@@ -181,6 +197,6 @@ export default {
 
   // Test hook: lets tests force the JSON/text branch without spawning mypy.
   _setJsonSupportForTests(value) {
-    supportsJsonOutput = Boolean(value);
+    jsonSupportOverride = Boolean(value);
   },
 };

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatReport, filterFindings } from '../src/normalizer.js';
+import { formatReport, filterFindings, applyMinSeverity } from '../src/normalizer.js';
 import ignore from 'ignore';
 
 describe('formatReport', () => {
@@ -293,5 +293,69 @@ describe('filterFindings', () => {
     }];
     const filtered = runFilter(ig, results);
     assert.equal(filtered[0].findings.length, 0);
+  });
+});
+
+describe('applyMinSeverity', () => {
+  function makeResults() {
+    return [
+      {
+        tool: 'ruff',
+        findings: [
+          { file: 'app.py', line: 1, tag: 'LINTER', rule: 'F401', severity: 'error', message: 'unused import' },
+          { file: 'app.py', line: 2, tag: 'DOCS', rule: 'D100', severity: 'warning', message: 'missing docstring' },
+        ],
+      },
+      { tool: 'knip', error: 'parse failed', findings: [] },
+      { tool: 'line-check', findings: null },
+    ];
+  }
+
+  it('keeps every finding when minSeverity is warning (default)', () => {
+    const results = makeResults();
+    const out = applyMinSeverity(results, 'warning');
+    assert.equal(out[0].findings.length, 2);
+  });
+
+  it('keeps every finding when minSeverity is not set', () => {
+    const results = makeResults();
+    const out = applyMinSeverity(results, undefined);
+    assert.equal(out[0].findings.length, 2);
+  });
+
+  it('drops warnings and keeps errors when minSeverity is error', () => {
+    const results = makeResults();
+    const out = applyMinSeverity(results, 'error');
+    assert.equal(out[0].findings.length, 1);
+    assert.equal(out[0].findings[0].severity, 'error');
+    assert.equal(out[0].findings[0].rule, 'F401');
+  });
+
+  it('leaves tool errors and results without findings untouched', () => {
+    const results = makeResults();
+    const out = applyMinSeverity(results, 'error');
+    assert.equal(out[1].error, 'parse failed');
+    assert.equal(out[2].findings, null);
+  });
+
+  it('mutates in place and returns the same array (exit code sees the filter)', () => {
+    const results = makeResults();
+    const out = applyMinSeverity(results, 'error');
+    assert.equal(out, results);
+    assert.equal(results[0].findings.length, 1);
+  });
+});
+
+describe('formatReport min severity header', () => {
+  it('adds a Min severity line when the filter is active', () => {
+    const out = formatReport({ targetDir: '/tmp/project', results: [], warnings: [], minSeverity: 'error' });
+    assert.match(out, /\*\*Min severity\*\*: error/);
+  });
+
+  it('omits the line at the default severity', () => {
+    const out = formatReport({ targetDir: '/tmp/project', results: [], warnings: [], minSeverity: 'warning' });
+    assert.doesNotMatch(out, /Min severity/);
+    const plain = formatReport({ targetDir: '/tmp/project', results: [], warnings: [] });
+    assert.doesNotMatch(plain, /Min severity/);
   });
 });

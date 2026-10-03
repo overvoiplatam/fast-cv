@@ -166,7 +166,8 @@ fast-cv [directory] [options]
 | ------ | ------------- | --------- |
 | `-t, --timeout <seconds>` | Optional per-tool timeout guardrail | disabled |
 | `--tools <names>` | Comma-separated tool list | all applicable |
-| `-f, --format <type>` | Output format (`markdown` or `sarif`) | `markdown` |
+| `-f, --format <type>` | Output format (`markdown`, `sarif` or `json`) | `markdown` |
+| `--min-severity <level>` | Lowest severity to report (`error` hides warnings) | `warning` |
 | `-x, --exclude <patterns>` | Comma-separated ignore patterns (gitignore syntax) | none |
 | `--only <patterns>` | Comma-separated file paths or glob patterns to scan exclusively | none |
 | `--fix` | Auto-fix formatting/style issues where supported | `false` |
@@ -201,6 +202,9 @@ fast-cv --fix --only="src/utils.py" .
 # Output SARIF format (for CI/CD integration)
 fast-cv --format sarif .
 fast-cv --format sarif . | jq .
+
+# Output compact JSON (for agents / scripted consumption)
+fast-cv --format json .
 
 # Auto-install any missing tools, then scan
 fast-cv . --auto-install
