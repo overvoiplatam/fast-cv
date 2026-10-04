@@ -12,8 +12,8 @@ node bin/fast-cv.js .                 # full scan
 node bin/fast-cv.js --fix .           # run only fixers, apply fixes, exit (no report; formatting only with shipped defaults)
 node bin/fast-cv.js --format sarif .  # SARIF output
 node bin/fast-cv.js --format json .   # compact JSON output (agents)
-node bin/fast-cv.js --git-only .      # scan only uncommitted git-changed files
-node bin/fast-cv.js --git-only=all .  # also include files from unpushed commits
+node bin/fast-cv.js --git-only=all .          # scan only git-changed files (uncommitted + unpushed)
+node bin/fast-cv.js --git-only=uncommitted .  # working tree only (no unpushed commits)
 node bin/fast-cv.js --max-lines=400 . # custom file length threshold
 node bin/fast-cv.js --max-lines=0 .   # disable file length check
 node bin/fast-cv.js --no-docstring .  # suppress DOCS tag findings

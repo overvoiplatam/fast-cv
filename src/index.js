@@ -49,7 +49,7 @@ function configureScanCommand(program) {
     .option('--max-lines <number>', 'flag files exceeding this line count (0 to disable)', '600')
     .option('--max-lines-omit <patterns>', 'comma-separated patterns to exclude from line count check (gitignore syntax)', '')
     .option('--no-docstring', 'suppress documentation findings (DOCS tag)', false)
-    .option('--git-only [scope]', 'scan only git-changed files (default: uncommitted; use --git-only=all to include unpushed commits)', false)
+    .option('--git-only [scope]', 'scan only git-changed files (default: uncommitted+unpushed; use --git-only=uncommitted for uncommitted only)', false)
     .addOption(new Option('-f, --format <type>', 'output format').choices(['markdown', 'sarif', 'json']).default('markdown'))
     .addOption(new Option('--min-severity <level>', 'lowest severity to report (error: hide warnings)').choices(['error', 'warning']).default('warning'))
     .action(executeScanAction);
@@ -135,14 +135,25 @@ function splitCsv(value) {
   return value.split(',').map(s => s.trim()).filter(Boolean);
 }
 
-// Same failure style as parseMaxLines: a bad flag value is a usage error,
-// not a findings run, so it exits 2 with the accepted values spelled out.
-// Bare `--git-only` (commander hands us `true`) scans the working tree only.
-function parseGitOnlyScope(value) {
-  if (value === true || value === 'uncommitted') return 'uncommitted';
-  if (value === 'all') return 'all';
-  process.stderr.write(`Error: invalid --git-only scope: ${value} (expected 'uncommitted' or 'all')\n`);
-  process.exit(EXIT_PRECHECK_FAILED);
+// Same failure style as parseMaxLines: a usage error should never pass
+// silently, so known scopes map 1:1. Unknown strings keep the 0.2.1
+// behavior — they were silently treated as the uncommitted scope, which is
+// how the documented `--git-only .` pattern worked: commander folds the
+// positional target token into the optional `[scope]` (e.g. `--git-only .`
+// yields scope=".", target defaults to "."). Breaking that ember would
+// change what production hooks and CI scripts scan, so we keep the mapping
+// and emit a loud stderr warning instead.
+// Exported for tests; each mapping is covered by a unit test.
+export function parseGitOnlyScope(value) {
+  if (value === true || value === 'all') return 'all';
+  if (value !== 'uncommitted') {
+    process.stderr.write(
+      `Warning: --git-only "${String(value)}" is not a known scope; using the 0.2.1 default (uncommitted). `
+      + `Say --git-only=all or --git-only=uncommitted to be explicit.\n`
+    );
+  }
+  // 'uncommitted' and every unknown value map to 'uncommitted' (0.2.1 compat).
+  return 'uncommitted';
 }
 
 async function resolveGitOnlyFiles(targetDir, options, parsed) {

@@ -101,11 +101,26 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
     // Semantic fix is gated: shipped defaults only get formatting (preFixCommands), not --fix
     const effectiveFix = fix && configSource !== 'package-default';
     const fixSkipped = fix && !effectiveFix;
+    const duration = () => Date.now() - start;
 
     try {
       const toolFiles = files.length > 0 && Array.isArray(tool.extensions)
         ? files.filter(f => tool.extensions.some(ext => f.endsWith(ext)))
         : files;
+
+      if (typeof tool.skip === 'function') {
+        const skipNote = tool.skip({ targetDir, toolFiles });
+        if (skipNote) {
+          resolve({
+            tool: tool.name,
+            findings: [],
+            skipped: skipNote,
+            duration: duration(),
+            fixSkipped,
+          });
+          return;
+        }
+      }
 
       if (fix) await runPreFixCommands(tool, targetDir, configPath, toolFiles, timeout);
 
@@ -118,7 +133,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
             error: `${tool.name} DB update failed: ${dbError}`,
             hint: `Retry the download with \`fast-cv --update-db .\`. If it keeps failing, `
               + `the registry may be unreachable from this network.`,
-            duration: Date.now() - start,
+            duration: duration(),
             fixSkipped,
           });
           return;
@@ -129,65 +144,64 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
 
       const result = await spawnAndCollect(bin, args, { cwd, timeout });
 
-      const duration = Date.now() - start;
-
-      if (result.killed) {
-        resolve({
-          tool: tool.name,
-          findings: [],
-          error: `Timeout after ${(timeout / 1000).toFixed(0)}s`,
-          hint: 'Raise the budget with `--timeout <seconds>`, or narrow the scan with '
-            + '`--only` or `--git-only`.',
-          duration,
-          fixSkipped,
-        });
-        return;
-      }
-
-      if (result.spawnError) {
-        resolve({
-          tool: tool.name,
-          findings: [],
-          error: `Failed to spawn ${bin}: ${result.spawnError.message}`,
-          hint: installHintFor(tool),
-          duration,
-          fixSkipped,
-        });
-        return;
-      }
-
-      try {
-        const findings = tool.parseOutput(result.stdout, result.stderr, result.exitCode);
-        resolve({
-          tool: tool.name,
-          findings,
-          error: null,
-          duration,
-          fixSkipped,
-        });
-      } catch (err) {
-        resolve({
-          tool: tool.name,
-          findings: [],
-          error: err.message,
-          // An adapter that knows the cause says so itself; otherwise infer.
-          hint: err.hint || inferToolErrorHint(err.message, tool.installHint),
-          duration,
-          fixSkipped,
-        });
-      }
+      resolve(classifySpawnResult(tool, bin, result, timeout, duration(), fixSkipped));
     } catch (err) {
-      const duration = Date.now() - start;
       resolve({
         tool: tool.name,
         findings: [],
         error: `Failed to spawn ${tool.name}: ${err.message}`,
         hint: installHintFor(tool),
-        duration,
+        duration: duration(),
         fixSkipped,
       });
     }
   });
+}
+
+/** Classifies a completed spawn outcome (timeout / spawn failure / parse) into a tool result. */
+function classifySpawnResult(tool, bin, result, timeout, duration, fixSkipped) {
+  if (result.killed) {
+    return {
+      tool: tool.name,
+      findings: [],
+      error: `Timeout after ${(timeout / 1000).toFixed(0)}s`,
+      hint: 'Raise the budget with `--timeout <seconds>`, or narrow the scan with '
+        + '`--only` or `--git-only`.',
+      duration,
+      fixSkipped,
+    };
+  }
+
+  if (result.spawnError) {
+    return {
+      tool: tool.name,
+      findings: [],
+      error: `Failed to spawn ${bin}: ${result.spawnError.message}`,
+      hint: installHintFor(tool),
+      duration,
+      fixSkipped,
+    };
+  }
+
+  try {
+    return {
+      tool: tool.name,
+      findings: tool.parseOutput(result.stdout, result.stderr, result.exitCode),
+      error: null,
+      duration,
+      fixSkipped,
+    };
+  } catch (err) {
+    return {
+      tool: tool.name,
+      findings: [],
+      error: err.message,
+      // An adapter that knows the cause says so itself; otherwise infer.
+      hint: err.hint || inferToolErrorHint(err.message, tool.installHint),
+      duration,
+      fixSkipped,
+    };
+  }
 }
 
 export async function runTools(toolConfigs, targetDir, options = {}) {

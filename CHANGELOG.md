@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-03
+
 ### Added — Documentation Validation (default feature)
 
 - Four new tool adapters, all emitting under the `DOCS` tag:
@@ -31,6 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - *Upgrade note:* run `npm install -g knip`, or re-run `./install.sh --mode all` which provisions it for you.
 - **Pre-commit hook script no longer passes `--timeout 60`.** Regenerating the hook via `fast-cv install-hook --force` writes `fast-cv .` without any timeout.
   - *Upgrade note:* re-run `fast-cv install-hook --force` to pick up the new body. If you want the 60-second guardrail back, edit the generated `.git/hooks/pre-commit` and re-add `--timeout 60`.
+- **Degraded environments now fail loudly (exit code 2) instead of reporting a clean scan.**
+  - If `--auto-install` cannot make *any* tool ready, the precheck fails with exit 2. Previously the run printed "No issues found" and exited 0 while leaving every scanner unrun.
+  - semgrep exiting non-zero with a stderr message and no parseable `results` array (e.g. a `--config auto` network/config failure) is now a tool error. Previously it was silently reported as an empty, clean scan.
+  - *Upgrade note:* CI without network or tool access fails red where it used to pass green-but-useless. Keep runner environments provisioned (`install.sh --mode all`) or scope the failing tool with `--tools`.
+- **Invalid flag values are usage errors (exit 2), not silent fallbacks.**
+  - `--max-lines abc` previously produced a `NaN` that silently disabled the file-length check; it now exits 2 with a clear message. `--max-lines 0` remains the documented disable value.
+- **Unknown `--git-only` values keep the 0.2.1 behavior, but now warn.** Commander folds the positional target into the optional `[scope]`, so documented invocations like `--git-only .` were treated as the uncommitted scope all along; that mapping (and what it scans) is preserved byte-for-byte, with a stderr warning suggesting the explicit `--git-only=all` / `--git-only=uncommitted` forms. Bare `--git-only` still scans uncommitted + unpushed.
+
+### Added — Agent-native output and scan scoping
+
+- `--format json`: compact, deterministic JSON report (`{target, summary, findings, toolErrors, warnings}`), optimized for AI-agent consumption alongside the existing markdown and SARIF formats.
+- `--min-severity <level>`: `--min-severity error` filters everything below `error` severity (SECURITY, BUG, PRIVACY, SECRET, LICENSE); the exit code, markdown header, and JSON summary all agree on what a "finding" is. The default (`warning`) keeps the full report unchanged.
+- `--git-only` gains an explicit `uncommitted` scope (working tree only). The bare flag keeps the 0.2.1 default — uncommitted + unpushed — so existing scripts, hooks, and CI scan the same files as before.
 
 ### Added
 
@@ -50,14 +65,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exit-code `2` now covers any reason validation could not complete: missing target, precheck failure, tool runtime error, timeout, parse error, or stale/missing scanner database. Previously it meant "precheck failed" only.
 - Markdown report footer reads "*N findings from M completed tools in Ts*" and appends "`; K tool error(s)`" when applicable.
 - SARIF `tool.driver.version` is now sourced from `package.json` (was hard-coded `0.2.0`, which drifted from the CLI's `0.2.1`).
+- Unexpected internal rejections (e.g. `EACCES` while pruning) surface as a one-line `fast-cv: <message>` on stderr with exit 2, instead of an unhandled-rejection stack trace with exit 1.
 
 ### Fixed
 
 - SARIF version field no longer drifts from the CLI version — both come from `package.json` via `src/version.js`.
+- ruff findings now read the severity field ruff actually emits. The adapters were reading a `type` field that does not exist in ruff 0.16 JSON output, so every finding was silently mapped to `warning` — downgrading `SECURITY` rules in reports and filters.
+- `git status` output is parsed byte-exactly via NUL separation (`--porcelain` `-z`): paths with spaces, quotes, or unicode, and rename destinations, are no longer truncated or misparsed. Files whose name merely *starts* with `..` (e.g. `..backup.js`) are no longer discarded as out-of-target, and the guard is separator-aware for Windows.
+- The built-in line check no longer counts a file's trailing newline as an extra line.
+- The tool runner clears its SIGTERM/SIGKILL escalation timers on exit — previously a delayed SIGKILL could land on a recycled PID if the process table reused the slot — and falls back to a direct kill on Windows, where process-group signalling is unavailable.
 - Timeout handling in `src/runner.js` is now guarded with `Number.isFinite(opts.timeout) && opts.timeout > 0`, so `clearTimeout(null)` is never called when no timeout is configured.
 
 ## [0.2.1] and earlier
 
 See `git log` for changes prior to the introduction of this changelog.
 
-[Unreleased]: https://github.com/araai/fast-cv/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/overvoiplatam/fast-cv/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/overvoiplatam/fast-cv/compare/v0.2.1...v0.3.0

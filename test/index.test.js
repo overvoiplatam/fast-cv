@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
-import { getScanExitCode } from '../src/index.js';
+import { getScanExitCode, parseGitOnlyScope } from '../src/index.js';
 import { VERSION } from '../src/version.js';
 
 const binPath = join(process.cwd(), 'bin', 'fast-cv.js');
@@ -126,11 +126,33 @@ describe('CLI flag validation', () => {
     assert.equal(status, 0, stderr);
   });
 
-  it('rejects an invalid --git-only scope with exit code 2 and a clear message', () => {
+  it('warns and keeps scanning for an unknown --git-only scope (0.2.1 fallback)', () => {
+    // `--git-only=bogus` is not an exit-2 usage error: 0.2.1 treated unknown
+    // strings as the uncommitted scope, and existing scripts may rely on
+    // that (including `--git-only .`, where commander folds the target
+    // token into the scope). The run must proceed — with a loud warning.
     const { status, stderr } = runCli(['--git-only=bogus', emptyDir]);
-    assert.equal(status, 2);
-    assert.match(stderr, /invalid --git-only scope: bogus/);
-    assert.match(stderr, /expected 'uncommitted' or 'all'/);
+    assert.match(stderr, /--git-only "bogus" is not a known scope; using the 0\.2\.1 default/);
+    // emptyDir is not a git repo, so the scan proceeds and fails on git-only
+    // resolution — but the parse step itself cannot abort before that point.
+    assert.doesNotMatch(stderr, /is not a known scope.*exit/);
+    assert.ok(typeof status === 'number');
+  });
+
+  describe('parseGitOnlyScope', () => {
+    it('bare --git-only keeps the 0.2.1 default: uncommitted+unpushed (all)', () => {
+      assert.equal(parseGitOnlyScope(true), 'all');
+    });
+
+    it('explicit scopes map unchanged', () => {
+      assert.equal(parseGitOnlyScope('all'), 'all');
+      assert.equal(parseGitOnlyScope('uncommitted'), 'uncommitted');
+    });
+
+    it('unknown values fall back to uncommitted (0.2.1 behavior for `--git-only .`)', () => {
+      assert.equal(parseGitOnlyScope('.'), 'uncommitted');
+      assert.equal(parseGitOnlyScope('bogus'), 'uncommitted');
+    });
   });
 
   it('writes a parseable JSON report for --format json', () => {

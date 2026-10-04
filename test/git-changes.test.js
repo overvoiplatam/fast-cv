@@ -130,4 +130,31 @@ describe('getGitChangedFiles', () => {
     assert.ok(allFiles.includes('new.py'));
     assert.ok(uncommittedFiles.includes('new.py'));
   });
+
+  it("all scope includes files from unpushed commits (the bare --git-only default)", async () => {
+    // Publish the initial commit so the next one registers as unpushed.
+    const originDir = await mkdtemp(join(tmpdir(), 'fcv-origin-'));
+    try {
+      git(['init', '--bare', originDir]);
+      git(['remote', 'add', 'origin', originDir], repo);
+      git(['push', '-u', 'origin', 'main'], repo);
+
+      // A clean commit with no working-tree changes plus an untracked file:
+      // only the 'all' scope should see both.
+      await writeFile(join(repo, 'committed-unpushed.js'), 'x');
+      git(['add', '.'], repo);
+      git(['commit', '-m', 'unpushed work'], repo);
+      await writeFile(join(repo, 'untracked.js'), 'y');
+
+      const all = await getGitChangedFiles(repo, 'all');
+      assert.ok(all.includes('committed-unpushed.js'), `missing unpushed commit file, got: ${all.join(', ')}`);
+      assert.ok(all.includes('untracked.js'));
+
+      const uncommitted = await getGitChangedFiles(repo, 'uncommitted');
+      assert.ok(!uncommitted.includes('committed-unpushed.js'));
+      assert.ok(uncommitted.includes('untracked.js'));
+    } finally {
+      await rm(originDir, { recursive: true, force: true });
+    }
+  });
 });

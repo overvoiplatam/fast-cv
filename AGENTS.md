@@ -38,7 +38,7 @@ node bin/fast-cv.js --update-db --tools=trivy .
 ```bash
 node bin/fast-cv.js --fix .                    # run only fixers, apply fixes, exit 0
 node bin/fast-cv.js --tools=eslint --fix .     # fix eslint only
-node bin/fast-cv.js --fix --git-only .         # fix only uncommitted git-changed files (--git-only=all adds unpushed)
+node bin/fast-cv.js --fix --git-only=all .     # fix only git-changed files (uncommitted + unpushed)
 ```
 
 **Note:** `--fix` runs only fix-capable tools (ruff, eslint, golangci-lint, clippy, stylelint, sqlfluff, docspec, spectral, markdownlint), applies fixes, outputs a summary to stderr, and exits 0 when fix tools complete. Tool execution errors exit 2. No findings report is generated. With shipped default configs, `--fix` only applies formatting changes (safe). Full semantic fix requires a local project config.
