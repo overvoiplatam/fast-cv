@@ -38,10 +38,10 @@ export async function precheck(tools, options = {}) {
     if (ready.length === 0) {
       // Every applicable tool is still missing after the auto-install attempts:
       // failing the run beats reporting a false clean (exit 0 with nothing scanned).
-      const installNotes = warnings.length > 0
-        ? `\nAuto-install attempts:\n${warnings.map(w => `  ${w}`).join('\n')}\n`
+      const notes = warnings.length > 0
+        ? '\nAuto-install attempts:\n' + warnings.map((w) => '  ' + w).join('\n') + '\n'
         : '';
-      return { ok: false, tools: ready, warnings, message: buildMissingMessage(missing) + installNotes };
+      return { ok: false, tools: ready, warnings, message: buildMissingMessage(missing) + notes };
     }
     return { ok: true, tools: ready, warnings };
   }

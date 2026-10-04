@@ -113,10 +113,17 @@ function parseScanOptions(options) {
     updateDb: options.updateDb,
     maxLines: parseMaxLines(options.maxLines),
     maxLinesOmit: splitCsv(options.maxLinesOmit),
-    fmt: options.format === 'sarif' ? formatSarif : options.format === 'json' ? formatJsonReport : formatReport,
+    fmt: resolveFormatter(options.format),
     noDocstring: options.noDocstring,
     minSeverity: options.minSeverity || 'warning',
   };
+}
+
+// Each format has its own formatter; resolve it once instead of a nested ternary.
+function resolveFormatter(format) {
+  if (format === 'sarif') return formatSarif;
+  if (format === 'json') return formatJsonReport;
+  return formatReport;
 }
 
 // parseInt('abc') is NaN, which would silently disable the line check.

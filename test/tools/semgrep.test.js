@@ -2,6 +2,30 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import semgrep from '../../src/tools/semgrep.js';
 
+// Shared fixtures — jscpd flags 13+ identical lines, so the big semgrep
+// result objects live once and tests compose around them.
+const EXEC_FINDING = {
+  check_id: 'python.lang.security.audit.exec-detected',
+  path: 'src/app.py',
+  start: { line: 42, col: 1 },
+  extra: {
+    message: 'Detected use of exec()',
+    severity: 'ERROR',
+    metadata: { category: 'security', impact: 'HIGH' },
+  },
+};
+
+const COMPARISON_FINDING = {
+  check_id: 'python.lang.correctness.useless-comparison',
+  path: 'src/utils.py',
+  start: { line: 10, col: 5 },
+  extra: {
+    message: 'Useless comparison',
+    severity: 'WARNING',
+    metadata: { category: 'correctness' },
+  },
+};
+
 describe('semgrep adapter', () => {
   it('has correct metadata', () => {
     assert.equal(semgrep.name, 'semgrep');
@@ -36,30 +60,7 @@ describe('semgrep adapter', () => {
   });
 
   it('parses JSON output with results', () => {
-    const stdout = JSON.stringify({
-      results: [
-        {
-          check_id: 'python.lang.security.audit.exec-detected',
-          path: 'src/app.py',
-          start: { line: 42, col: 1 },
-          extra: {
-            message: 'Detected use of exec()',
-            severity: 'ERROR',
-            metadata: { category: 'security', impact: 'HIGH' },
-          },
-        },
-        {
-          check_id: 'python.lang.correctness.useless-comparison',
-          path: 'src/utils.py',
-          start: { line: 10, col: 5 },
-          extra: {
-            message: 'Useless comparison',
-            severity: 'WARNING',
-            metadata: { category: 'correctness' },
-          },
-        },
-      ],
-    });
+    const stdout = JSON.stringify({ results: [EXEC_FINDING, COMPARISON_FINDING] });
 
     const findings = semgrep.parseOutput(stdout, '', 0);
     assert.equal(findings.length, 2);
@@ -109,18 +110,7 @@ describe('semgrep adapter', () => {
 
   it('parses findings on exit 1 with a valid results stdout', () => {
     const stdout = JSON.stringify({
-      results: [
-        {
-          check_id: 'python.lang.security.audit.exec-detected',
-          path: 'src/app.py',
-          start: { line: 42, col: 1 },
-          extra: {
-            message: 'Detected use of exec()',
-            severity: 'ERROR',
-            metadata: { category: 'security', impact: 'HIGH' },
-          },
-        },
-      ],
+      results: [EXEC_FINDING],
       errors: [{ message: 'partial scan error' }],
     });
 
