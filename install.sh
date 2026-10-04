@@ -591,14 +591,25 @@ if [[ "${INSTALL_MODE}" == "all" || "${INSTALL_MODE}" == "app" ]]; then
   # runs npm install, so it would otherwise silently break a full install.
   # One call, not one per tool: each --no-save install prunes the packages the
   # previous one added, so splitting them leaves only the last batch behind.
+  #
+  # `eslint` itself is a peer here ON PURPOSE: eslint-plugin-svelte does a
+  # runtime `import("eslint")` from the plugin's own location, and the global
+  # `eslint` binary does not satisfy ESM resolution — without a local copy the
+  # plugin's import degrades to whatever system eslint node happens to find,
+  # which produced fatal "Invalid Version" parser errors on real projects.
+  # `svelte` (compiler) and `vue-eslint-parser` are required peers of their
+  # framework plugins that --legacy-peer-deps will never auto-install.
   CONFIG_PEERS=(
+    eslint
     eslint-plugin-sonarjs
     eslint-plugin-security
     typescript-eslint
     eslint-plugin-react
     eslint-plugin-react-hooks
     eslint-plugin-vue
+    vue-eslint-parser
     eslint-plugin-svelte
+    svelte
     eslint-plugin-jsonc
     eslint-plugin-jsdoc
     stylelint-config-standard

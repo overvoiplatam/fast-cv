@@ -51,12 +51,24 @@ What fast-cv checks per language. Columns use checkmarks for clarity; tool names
 | **Scala** | — | semgrep | — | — | — | — | jscpd | typos | — |
 | **SQL** | sqlfluff | — | trivy | — | — | — | jscpd | typos | — |
 | **CSS/SCSS** | stylelint | — | — | — | — | — | jscpd | typos | — |
+| **Svelte** | eslint (+`svelte/*` rules) | semgrep | trivy | — | — | jscpd | typos | trivy |
+| **Vue** | eslint (+`vue/*` rules) | semgrep | trivy | — | — | jscpd | typos | trivy |
 | **OpenAPI / AsyncAPI / JSON Schema** | docspec + spectral | — | — | — | — | — | — | — | — |
 | **Markdown / prose** | markdownlint + vale | — | — | — | — | — | — | — | — |
 
 \* typos is an **opt-in** tool (requires `--tools=typos`).
 
 **Best covered**: Python (8 tools), TypeScript (8 tools), JavaScript (7 tools), Go (6 tools), Rust (5 tools).
+
+**Svelte/Vue note**: `.svelte` and `.vue` files are linted by eslint with the
+`eslint-plugin-svelte`/`eslint-plugin-vue` recommended sets, all activated
+automatically when the plugins (and their required peers — the `svelte`
+compiler, `vue-eslint-parser`) are present. `install.sh --mode all/app`
+installs everything needed. When a required piece is missing — or the runtime
+incompatibilities fast-cv knows about are detected (an eslint@10 core with a
+`eslint-scope` older than 9.1.2, or distro-managed stub packages in the
+global node paths) — the affected rules are disabled and the report explains
+exactly why under `[WARN]` instead of crashing on those files.
 
 ## Security Architecture
 

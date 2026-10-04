@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Svelte/Vue lint lanes (they crashed or silently never ran)
+
+- `.svelte` and `.vue` files were effectively never linted by the shipped default config: `eslint-plugin-svelte` cannot even import without the `svelte` compiler (its npm peer), `eslint-plugin-vue` cannot parse without `vue-eslint-parser`, and `eslint-plugin-svelte` does a runtime `import("eslint")` no global eslint binary satisfies — none of these peers are auto-installed under the `--legacy-peer-deps` install path. `install.sh` now ships all of them (`eslint`, `svelte`, `vue-eslint-parser` added to `CONFIG_PEERS`) and the CI self-scan batch pins them.
+- `svelte-eslint-parser@1.8.x` still bundles `eslint-scope 8.4.0`, whose `ScopeManager` lacks `addGlobals()` — which the eslint@10 language core calls on every source verification — crashing the first scanned `.svelte` file with `TypeError: scopeManager.addGlobals is not a function` (eslint@9 does not make that call, so the pair works there). The default config now introspects the installed parser's own eslint-scope the way the parser resolves it and keeps svelte rules off, with a `[WARN]` in the report, until the parser ships eslint-scope 9.x.
+- The svelte/vue parsers resolve `eslint-scope`/`espree` from the scanned project's cwd, falling back to global node paths; on distro-managed hosts that fallback hits stub packages exposing non-semver versions (`/usr/share/nodejs/eslint-scope` reports version `"main"`), producing `semver: Invalid Version: main` parse errors. The config probes exactly what the parsers probe and degrades with an actionable `[WARN]` instead.
+- eslint degradation notices printed by the shipped config (missing extras, disabled framework rules) now surface in the report's `[WARN]` section instead of being swallowed with the tool's stderr.
+- README Language Coverage now lists Svelte and Vue rows.
+
 ### Changed — License & packaging compliance
 
 - **`eslint-plugin-sonarjs` (LGPL-3.0) and `eslint-plugin-security` (Apache-2.0) moved from `dependencies` to `devDependencies`.** The production graph is now 100% permissive (commander MIT, ignore MIT, yaml ISC) — nobody installing fast-cv pulls LGPL code into their tree unless they opt in. The extras still activate automatically wherever they are present: `install.sh --mode all/app` installs them (`CONFIG_PEERS`), `npm install` inside the repo pulls them, and the default eslint config prints a stderr note with the exact install command when they are missing.

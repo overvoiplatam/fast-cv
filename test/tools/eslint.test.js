@@ -95,6 +95,51 @@ describe('eslint adapter', () => {
     assert.equal(findings.length, 0);
   });
 
+  it('returns plain array without stderr notices', () => {
+    const stdout = JSON.stringify([{
+      filePath: 'f.js',
+      messages: [{ ruleId: 'no-eval', severity: 2, message: 'test', line: 1, column: 1 }],
+    }]);
+    const parsed = eslint.parseOutput(stdout, 'some unrelated stderr', 1);
+    assert.ok(Array.isArray(parsed));
+    assert.equal(parsed.length, 1);
+  });
+
+  it('surfaces config degradation notices as warnings', () => {
+    const stdout = JSON.stringify([{
+      filePath: 'f.js',
+      messages: [{ ruleId: 'no-eval', severity: 2, message: 'test', line: 1, column: 1 }],
+    }]);
+    const stderr = [
+      '[fast-cv eslint defaults] eslint-plugin-sonarjs not found — related rules disabled (optional extras). To enable: npm install eslint-plugin-sonarjs',
+      '[fast-cv eslint defaults] svelte missing (peer required by framework plugin) — framework rules disabled. To enable: npm install svelte',
+      'irrelevant eslint chatter',
+    ].join('\n');
+
+    const parsed = eslint.parseOutput(stdout, stderr, 1);
+    assert.ok(!Array.isArray(parsed));
+    assert.equal(parsed.findings.length, 1);
+    assert.equal(parsed.findings[0].rule, 'no-eval');
+    assert.equal(parsed.warnings.length, 2);
+    assert.ok(parsed.warnings[0].startsWith('[fast-cv eslint defaults]'));
+    assert.equal(parsed.warnings[1].split('\n').length, 1);
+  });
+
+  it('keeps notices when the scan is clean (findings empty)', () => {
+    const stdout = JSON.stringify([{ filePath: 'f.js', messages: [] }]);
+    const parsed = eslint.parseOutput(stdout, '[fast-cv eslint defaults] x missing', 0);
+    assert.ok(!Array.isArray(parsed));
+    assert.equal(parsed.findings.length, 0);
+    assert.equal(parsed.warnings.length, 1);
+  });
+
+  it('drops duplicate notices rather than stacking lines', () => {
+    const stdout = JSON.stringify([{ filePath: 'f.js', messages: [] }]);
+    const one = '[fast-cv eslint defaults] eslint-plugin-sonarjs not found';
+    const parsed = eslint.parseOutput(stdout, `${one}\n${one}`, 0);
+    assert.equal(parsed.warnings.length, 1);
+  });
+
   it('throws on fatal error', () => {
     assert.throws(
       () => eslint.parseOutput('', 'Oops!', 2),

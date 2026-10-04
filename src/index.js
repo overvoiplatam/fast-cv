@@ -319,7 +319,12 @@ async function runScanFlow(precheckResult, targetDir, parsed, prune) {
   // agree on what a "finding" is once --min-severity is in play.
   applyMinSeverity(filtered, parsed.minSeverity);
 
-  const warnings = [...(prune.warnings || []), ...(precheckResult.warnings || [])];
+  const warnings = [
+    ...(prune.warnings || []),
+    ...(precheckResult.warnings || []),
+    // Tools that degrade gracefully (eslint extras) surface their notices here.
+    ...results.flatMap(r => r.warnings || []),
+  ];
   process.stdout.write(parsed.fmt({
     targetDir, results: filtered, warnings, fileCount: prune.files.length,
     minSeverity: parsed.minSeverity,

@@ -184,9 +184,16 @@ function classifySpawnResult(tool, bin, result, timeout, duration, fixSkipped) {
   }
 
   try {
+    // parseOutput usually returns a findings array. Adapters whose tools do
+    // silent graceful degradation (eslint's shipped config) can instead
+    // return `{ findings, warnings }` — the warnings carry the "what is
+    // disabled and why" notice lines into the report's [WARN] section.
+    const parsed = tool.parseOutput(result.stdout, result.stderr, result.exitCode);
+    const isArray = Array.isArray(parsed);
     return {
       tool: tool.name,
-      findings: tool.parseOutput(result.stdout, result.stderr, result.exitCode),
+      findings: isArray ? parsed : parsed.findings,
+      ...(!isArray && parsed.warnings && parsed.warnings.length > 0 ? { warnings: parsed.warnings } : {}),
       error: null,
       duration,
       fixSkipped,

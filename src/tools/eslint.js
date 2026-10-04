@@ -6,6 +6,28 @@ const execFileAsync = promisify(execFile);
 // eslint 9 is the first release that reads flat config by default.
 const MIN_ESLINT_MAJOR = 9;
 
+// The shipped default config prints degradation notices with this prefix on
+// stderr when an optional extra (plugin/peer) is missing — see
+// defaults/eslint.config.mjs. The runner otherwise discards the stderr of a
+// successful tool run, so the adapter surveils this prefix and surfaces the
+// lines as report-level warnings; a silently disabled sampler is exactly the
+// kind of information users otherwise never learn.
+const CONFIG_NOTICE_PREFIX = '[fast-cv eslint defaults]';
+
+// One or more lines of `stderr` starting with CONFIG_NOTICE_PREFIX, to be
+// reported as [WARN] entries in the final report (deduped: callers may run
+// eslint more than once per scan; one degraded extra should produce one
+// warning, not one per invocation).
+function extractConfigNotices(stderr) {
+  if (!stderr || !String(stderr).includes(CONFIG_NOTICE_PREFIX)) return [];
+  return [...new Set(
+    String(stderr).split(/\r?\n/)
+      .filter(line => line.startsWith(CONFIG_NOTICE_PREFIX))
+      .map(line => line.trim())
+      .filter(Boolean),
+  )];
+}
+
 const SECURITY_RULES = new Set([
   'no-eval', 'no-implied-eval', 'no-new-func',
   'no-script-url', 'no-proto', 'no-caller', 'no-extend-native',
@@ -133,10 +155,17 @@ export default {
     if (exitCode === 2 && !stdout.trim()) {
       throw new Error(`eslint error: ${stderr.slice(0, 500)}`);
     }
-    if (!stdout.trim()) return [];
 
-    const results = parseEslintJson(stdout);
-    return results.flatMap(fileResult => collectEslintFindings(fileResult));
+    // The shipped default config degrades gracefully — absent plugins make it
+    // print one stderr line per disabled extra (see defaults/eslint.config.mjs).
+    // Those lines are otherwise lost: a tool without findings has its stderr
+    // discarded. Surface them as report-level warnings instead — they carry
+    // the exact "silent degradation" news that looks like a bug to users.
+    const notices = extractConfigNotices(stderr);
+    const findings = stdout.trim() ? parseEslintJson(stdout).flatMap(f => collectEslintFindings(f)) : [];
+
+    if (notices.length > 0) return { findings, warnings: notices };
+    return findings;
   },
 
   async checkInstalled() {

@@ -85,11 +85,14 @@ jobs:
         run: |
           npm install -g eslint
           npm install --no-save \
+            eslint@^10 \
             typescript-eslint@^8 \
             eslint-plugin-react@^7 \
             eslint-plugin-react-hooks@^7 \
             eslint-plugin-vue@^10 \
+            vue-eslint-parser@^10 \
             eslint-plugin-svelte@^3 \
+            svelte@^5 \
             eslint-plugin-jsonc@^3 \
             eslint-plugin-jsdoc@^65
       # The built-in line check runs alongside any --tools selection, and
