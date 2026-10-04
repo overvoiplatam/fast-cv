@@ -76,19 +76,22 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Install eslint and plugins
+      # sonarjs/security come from devDependencies (npm ci). The rest are
+      # self-scan-only peers, pinned to their current majors — unpinned
+      # specifiers re-resolve on every run, and an upstream peer bump
+      # (e.g. eslint-plugin-jsonc requiring eslint>=9.38) then breaks the
+      # whole batch against whatever eslint version the devDep tree pulled in.
+      - name: Install eslint and self-scan plugin majors
         run: |
           npm install -g eslint
           npm install --no-save \
-            eslint-plugin-sonarjs \
-            eslint-plugin-security \
-            typescript-eslint \
-            eslint-plugin-react \
-            eslint-plugin-react-hooks \
-            eslint-plugin-vue \
-            eslint-plugin-svelte \
-            eslint-plugin-jsonc \
-            eslint-plugin-jsdoc
+            typescript-eslint@^8 \
+            eslint-plugin-react@^7 \
+            eslint-plugin-react-hooks@^7 \
+            eslint-plugin-vue@^10 \
+            eslint-plugin-svelte@^3 \
+            eslint-plugin-jsonc@^3 \
+            eslint-plugin-jsdoc@^65
       # The built-in line check runs alongside any --tools selection, and
       # install.sh is exempt from it: it must stay one self-contained file for
       # the `curl ... | bash` path, so it cannot be split.

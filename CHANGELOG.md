@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed — License & packaging compliance
 
 - **`eslint-plugin-sonarjs` (LGPL-3.0) and `eslint-plugin-security` (Apache-2.0) moved from `dependencies` to `devDependencies`.** The production graph is now 100% permissive (commander MIT, ignore MIT, yaml ISC) — nobody installing fast-cv pulls LGPL code into their tree unless they opt in. The extras still activate automatically wherever they are present: `install.sh --mode all/app` installs them (`CONFIG_PEERS`), `npm install` inside the repo pulls them, and the default eslint config prints a stderr note with the exact install command when they are missing.
+- devDependencies bumped to the eslint-9/10-compatible majors: `eslint-plugin-sonarjs@^4.2.2` (dropped its `@babel/eslint-parser` dep that pinned the local eslint to 8.x) and `eslint-plugin-security@^4.2.0` (no eslint peer at all). The CI self-scan batch now pins the remaining plugins to their current majors so an upstream peer bump can no longer break resolution against whatever eslint the devDep tree pulled in.
 - New CI job `license gate (production deps)`: `license-checker --production --failOn GPL;LGPL;AGPL;EUPL;SISSL;CPOL` fails the build if a runtime dependency ever introduces copyleft.
 - Added `THIRD_PARTY_NOTICES.md` — consolidated third-party index (vendored vale styles: proselint BSD-3-Clause, write-good MIT; both attribution files already shipped in each style directory).
 
