@@ -205,6 +205,29 @@ describe('filterFindings', () => {
     assert.equal(filtered[0].findings[0].file, 'src/app.js');
   });
 
+  it('removes cross-file findings anchored on lock files (jscpd) but keeps single-file ones (trivy SCA)', () => {
+    // Lock files are discovery-excluded; the ignore filter does not know them
+    // so trivy dependency findings survive. A similarity tool that also
+    // cross-references the lockfile reports content noise — dropped.
+    const ig = makeIgnore([]);
+    const results = [{
+      tool: 'jscpd',
+      findings: [
+        { file: 'package-lock.json', line: 2258, tag: 'DUPLICATION', rule: 'jscpd/json', otherFile: 'package-lock.json', message: 'Duplicated block — also in package-lock.json:2445' },
+      ],
+    }, {
+      tool: 'trivy',
+      findings: [
+        { file: 'package-lock.json', line: 0, tag: 'DEPENDENCY', rule: 'CVE-2024-1234', message: 'Vulnerable dependency' },
+      ],
+    }];
+
+    const filtered = runFilter(ig, results);
+    assert.equal(filtered[0].findings.length, 0); // jscpd noise dropped
+    assert.equal(filtered[1].findings.length, 1); // trivy SCA kept
+    assert.equal(filtered[1].findings[0].rule, 'CVE-2024-1234');
+  });
+
   it('handles absolute file paths', () => {
     const ig = makeIgnore(['dist/']);
     const results = [{

@@ -156,7 +156,12 @@ export async function createIgnoreFilter(targetDir, { exclude = [] } = {}) {
   return ig;
 }
 
-const IGNORED_FILES_SET = new Set(IGNORED_FILES);
+// Exported for the findings post-filter: these files are excluded from
+// *discovery* (content tools never lint them directly), yet independent
+// full-tree scanners — trivy SCA in particular — still legitimately report
+// on them (CVEs live inside lock files). The filter therefore must NOT
+// blanket-drop findings filed against them.
+export const IGNORED_FILES_SET = new Set(IGNORED_FILES);
 
 export async function pruneDirectory(targetDir, { exclude = [], only = [], gitFiles = null } = {}) {
   const ignoreFilter = await createIgnoreFilter(targetDir, { exclude });

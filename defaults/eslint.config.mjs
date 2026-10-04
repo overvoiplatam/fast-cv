@@ -25,6 +25,20 @@ const jsFiles = ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx"];
 const tsFiles = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
 const codeFiles = tseslint ? [...jsFiles, ...tsFiles] : jsFiles;
 
+// The shipped extras (sonarjs quality rules, security anti-patterns) are
+// optional at npm-install time: devDependencies here, CONFIG_PEERS for
+// install.sh users, bring-your-own for registry consumers. Silent loss of
+// cognitive-complexity looks like a bug, so say exactly what is off and
+// how to enable it. stderr only — eslint report flows on stdout.
+const missingExtras = [];
+if (!sonarjs) missingExtras.push("eslint-plugin-sonarjs");
+if (!security) missingExtras.push("eslint-plugin-security");
+if (missingExtras.length > 0) {
+  console.error(
+    `[fast-cv eslint defaults] ${missingExtras.join(", ")} not found — related rules disabled (optional extras). To enable: npm install ${missingExtras.join(" ")}`,
+  );
+}
+
 const config = [
   // ─── sonarjs (recommended rules + project overrides) ───────────────
   // Register the plugin once. ESLint 10+ rejects duplicate plugin

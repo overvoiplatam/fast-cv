@@ -41,6 +41,23 @@ jobs:
       # only continuous signal for "is it time to bump?". Failure here is the trigger.
       - run: npm audit --omit=dev --audit-level=high
 
+  licenses:
+    name: license gate (production deps)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      # Distribution invariant: the production graph must stay 100% permissive
+      # (MIT/BSD/ISC/Apache-2.0/...). Copyleft licenses (GPL/LGPL/AGPL) in
+      # runtime deps break installs that bundle node_modules later (Docker,
+      # esbuild) and trip enterprise license policies. Dev-only packages are
+      # exempt (--production): eslint-plugin-sonarjs stays LGPL-3.0 as a
+      # devDependency extra, documented in THIRD_PARTY_NOTICES.md.
+      - run: npx --yes license-checker --production --failOn "GPL;LGPL;AGPL;EUPL;SISSL;CPOL" --summary
+
   shellcheck:
     name: shellcheck install.sh
     runs-on: ubuntu-latest

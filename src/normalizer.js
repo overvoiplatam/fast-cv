@@ -1,6 +1,12 @@
 import { relative, isAbsolute } from 'node:path';
 import { collectFindings } from './findings.js';
 import { cleanToolError } from './tool-errors.js';
+// Lock files are excluded at discovery, but independent full-tree scanners
+// (trivy SCA) still report CVEs filed against them — so the ignoreFilter
+// below deliberately does NOT know about them. The only tool allowed to
+// cross-reference them is the similarity one: a duplicated block spanning
+// two generated lock segments is content noise, not a real finding.
+import { IGNORED_FILES_SET as DISCOVERY_IGNORED_FILES } from './pruner.js';
 
 export function filterFindings(results, targetDir, ignoreFilter, onlyFilter, { verbose = false } = {}) {
   return results.map(result => {
@@ -10,6 +16,11 @@ export function filterFindings(results, targetDir, ignoreFilter, onlyFilter, { v
     const filtered = result.findings.filter(f => {
       const relPath = isAbsolute(f.file) ? relative(targetDir, f.file) : f.file;
       if (ignoreFilter.ignores(relPath)) return false;
+      // Cross-file findings anchored on a discovery-ignored file (jscpd
+      // duplication inside package-lock.json) are by-products of the tool's
+      // full-tree sweep, not discoverable content — drop them. Single-file
+      // findings (trivy CVEs, semgrep rules) on the same files stay.
+      if (DISCOVERY_IGNORED_FILES.has(relPath) && f.otherFile) return false;
       // If --only is active, strip findings outside the inclusion set
       if (onlyFilter && !onlyFilter.includes(relPath)) return false;
       // For cross-file tools (jscpd): also filter if the paired file is ignored

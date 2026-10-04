@@ -1,7 +1,7 @@
 {
   "name": "fast-cv",
   "version": "0.3.0",
-  "description": "Fast Code Validation — orchestrates linters and security scanners with unified Markdown reports",
+  "description": "Fast Code Validation \u2014 orchestrates linters and security scanners with unified Markdown reports",
   "type": "module",
   "bin": {
     "fast-cv": "./bin/fast-cv.js"
@@ -32,5 +32,9 @@
     "commander": "^12.1.0",
     "ignore": "^6.0.2",
     "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "eslint-plugin-sonarjs": "^2.0.4",
+    "eslint-plugin-security": "^3.0.1"
   }
 }

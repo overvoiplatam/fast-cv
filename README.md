@@ -439,7 +439,7 @@ fast-cv resolves configs with a fallback chain (first match wins):
 
 **ruff** ships with pydocstyle (`D`) rules enabled for docstring validation, with targeted ignores for overly-noisy rules (`D100`, `D104`, `D105`, `D107`). Test files are exempt from `D` rules.
 
-**eslint** ships with [eslint-plugin-sonarjs](https://github.com/SonarSource/eslint-plugin-sonarjs) enabled, providing cognitive complexity analysis, duplicate string detection, and code smell rules on top of the standard security and quality checks.
+**eslint** ships with quality/security plugins as **optional extras**: [eslint-plugin-sonarjs](https://github.com/SonarSource/eslint-plugin-sonarjs) (cognitive complexity analysis, duplicate string detection, code smell rules — LGPL-3.0) and [eslint-plugin-security](https://github.com/eslint-community/eslint-plugin-security) (anti-pattern detection). When present they activate automatically; when absent, the remaining eslint rules still run and a note on stderr lists what is disabled. The extras are installed for you by `install.sh` (`CONFIG_PEERS`, `--mode all`/`app`) and by `npm install` inside this repo. If you installed fast-cv another way, enable them anywhere with `npm install eslint-plugin-sonarjs eslint-plugin-security`.
 
 **golangci-lint** enables `gocognit` and `gocritic` linters by default when no local `.golangci.yml` config is found, adding cognitive complexity analysis and opinionated code checks for Go.
 

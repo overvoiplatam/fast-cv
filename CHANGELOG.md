@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — License & packaging compliance
+
+- **`eslint-plugin-sonarjs` (LGPL-3.0) and `eslint-plugin-security` (Apache-2.0) moved from `dependencies` to `devDependencies`.** The production graph is now 100% permissive (commander MIT, ignore MIT, yaml ISC) — nobody installing fast-cv pulls LGPL code into their tree unless they opt in. The extras still activate automatically wherever they are present: `install.sh --mode all/app` installs them (`CONFIG_PEERS`), `npm install` inside the repo pulls them, and the default eslint config prints a stderr note with the exact install command when they are missing.
+- New CI job `license gate (production deps)`: `license-checker --production --failOn GPL;LGPL;AGPL;EUPL;SISSL;CPOL` fails the build if a runtime dependency ever introduces copyleft.
+- Added `THIRD_PARTY_NOTICES.md` — consolidated third-party index (vendored vale styles: proselint BSD-3-Clause, write-good MIT; both attribution files already shipped in each style directory).
+
+### Fixed
+
+- Findings on `package-lock.json` and other generated lock files are now filtered the way they were always documented: jscpd duplicate-block findings inside them are dropped (generated segments legitimately repeat), while single-file findings from independent scanners (trivy CVE/dependency/`--licenses`) are preserved — they were never supposed to be filtered and still aren't.
+
 ## [0.3.0] - 2026-10-03
 
 ### Added — Documentation Validation (default feature)
