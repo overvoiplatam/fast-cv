@@ -81,11 +81,17 @@ jobs:
       # specifiers re-resolve on every run, and an upstream peer bump
       # (e.g. eslint-plugin-jsonc requiring eslint>=9.38) then breaks the
       # whole batch against whatever eslint version the devDep tree pulled in.
+      # The self-scan runs against a FIXED eslint major: react@7 peers require
+      # ^9.7 (eslint 10 excluded) while jsonc@3 needs >=9.38 — eslint@^9 is the
+      # only version every pinned plugin accepts. The -g binary and the local
+      # tree must be the same major because the shipped default config
+      # introspects the locally-resolvable eslint package (its major decides
+      # whether the svelte lane's addGlobals compat check applies).
       - name: Install eslint and self-scan plugin majors
         run: |
-          npm install -g eslint
+          npm install -g eslint@^9
           npm install --no-save \
-            eslint@^10 \
+            eslint@^9 \
             typescript-eslint@^8 \
             eslint-plugin-react@^7 \
             eslint-plugin-react-hooks@^7 \
