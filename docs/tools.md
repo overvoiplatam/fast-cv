@@ -58,6 +58,12 @@ export default {
 | 18 | markdownlint | `src/tools/markdownlint.js` | `.md .markdown` | DOCS | no | yes | .markdownlint.json |
 | 19 | vale | `src/tools/vale.js` | `.md .markdown .rst .adoc .txt` | DOCS | no | no | .vale.ini |
 
+`golangci-lint` supports both v1 and v2 binaries: the adapter detects the
+major from `--version` and switches the JSON output flag accordingly; the
+shipped default config targets the v2 schema (v1 users provide their own
+local `.golangci.yml`). `knip` skips (and reports) targets that lack a
+`package.json` — it needs an npm project root to bootstrap.
+
 ## Tag Reference
 
 Tags categorize findings by type. Each tag maps to a SARIF severity level.

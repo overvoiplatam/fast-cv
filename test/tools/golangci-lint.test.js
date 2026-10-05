@@ -93,6 +93,49 @@ describe('golangci-lint adapter', () => {
     assert.equal(findings.length, 0);
   });
 
+  it('switches to v2 output flags when the detected major is 2', () => {
+    const previous = golangciLint.detectedMajor;
+    try {
+      golangciLint.detectedMajor = 2;
+      const { args } = golangciLint.buildCommand('/tmp/project', '/etc/golangci.yml');
+      assert.ok(args.includes('--output.json.path'));
+      assert.ok(args.includes('stdout'));
+      assert.ok(!args.includes('--out-format'));
+    } finally {
+      golangciLint.detectedMajor = previous;
+    }
+  });
+
+  it('keeps v1 flags when untested (detectedMajor 0)', () => {
+    const previous = golangciLint.detectedMajor;
+    try {
+      golangciLint.detectedMajor = 0;
+      const { args } = golangciLint.buildCommand('/tmp/project', null);
+      assert.ok(args.includes('--out-format'));
+      assert.ok(args.includes('json'));
+      assert.ok(!args.includes('--output.json.path'));
+    } finally {
+      golangciLint.detectedMajor = previous;
+    }
+  });
+
+  it('parses v2 output that trails a summary line after the JSON', () => {
+    const stdout = `${JSON.stringify({
+      Issues: [{
+        FromLinter: 'gosec',
+        Text: 'Hardcoded credentials may be a security issue',
+        Severity: 'error',
+        Pos: { Filename: 'auth.go', Line: 7, Column: 3 },
+      }],
+    })}\n1 issue.\n`;
+
+    const findings = golangciLint.parseOutput(stdout, '', 1);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].tag, 'SECURITY');
+    assert.equal(findings[0].rule, 'gosec');
+    assert.equal(findings[0].line, 7);
+  });
+
   it('throws on error exit with no stdout', () => {
     assert.throws(
       () => golangciLint.parseOutput('', 'error loading', 3),

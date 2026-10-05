@@ -324,6 +324,9 @@ async function runScanFlow(precheckResult, targetDir, parsed, prune) {
     ...(precheckResult.warnings || []),
     // Tools that degrade gracefully (eslint extras) surface their notices here.
     ...results.flatMap(r => r.warnings || []),
+    // Tools the runner skipped at run time (adapter skip hooks) — reported,
+    // never silently un-run.
+    ...results.filter(r => r.skipped).map(r => r.skipped),
   ];
   process.stdout.write(parsed.fmt({
     targetDir, results: filtered, warnings, fileCount: prune.files.length,

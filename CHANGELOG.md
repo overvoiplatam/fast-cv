@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — golangci-lint v2 support (adapted from local work, standardized)
+
+- `golangci-lint` v2 support in the adapter: `checkInstalled()` detects the major from `--version` output (exposed as the `detectedMajor` property, settable by tests), `buildCommand` uses v2's `--output.json.path stdout` (v1 keeps `--out-format json`), and v2's trailing summary line (`"0 issues."`) after the JSON document is handled by parsing the first balanced JSON object.
+- `defaults/.golangci.yml` now targets the v2 schema (`version: "2"`, nested `linters.settings`), verified against golangci-lint 2.10.1 (`config verify`). golangci-lint v1 rejects this schema — v1 users should provide a local config (local wins over shipped defaults in resolution order).
+- `knip` skips targets without a `package.json` (not a JS project) with a reported note instead of a misleading bootstrap-failure finding; run-time skips now surface in the report's `[WARN]` section (`result.skipped` was previously recorded by the runner but never displayed).
+- New shared module `src/adapter-helpers.js` with `parseLeadingJson` (first balanced JSON object, junk-aware), `majorFromVersion` (version-line → major), `skipUnlessFileExists` (project-root skip factory) and `resolveReportedPath` (recovers findings filenames that some tools relativize against a base of their own choosing — golangci-lint v2 was observed emitting paths relative to /tmp while its cwd was the target, breaking the ignore-path contract downstream). Each helper carries its own unit tests.
+
 ### Fixed — Svelte/Vue lint lanes (they crashed or silently never ran)
 
 - `.svelte` and `.vue` files were effectively never linted by the shipped default config: `eslint-plugin-svelte` cannot even import without the `svelte` compiler (its npm peer), `eslint-plugin-vue` cannot parse without `vue-eslint-parser`, and `eslint-plugin-svelte` does a runtime `import("eslint")` no global eslint binary satisfies — none of these peers are auto-installed under the `--legacy-peer-deps` install path. `install.sh` now ships all of them (`eslint`, `svelte`, `vue-eslint-parser` added to `CONFIG_PEERS`) and the CI self-scan batch pins them.

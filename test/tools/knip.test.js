@@ -1,5 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import knip from '../../src/tools/knip.js';
 
 describe('knip adapter', () => {
@@ -14,6 +18,19 @@ describe('knip adapter', () => {
 
   it('is not opt-in', () => {
     assert.ok(!knip.optIn);
+  });
+
+  it('skips non-JS targets with a reported note (no package.json)', () => {
+    assert.equal(
+      knip.skip({ targetDir: '/definitely/not/here' }),
+      'knip: not a JS project (no package.json in target) — skipped',
+    );
+  });
+
+  it('does not skip targets with a package.json', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'fcv-knip-'));
+    writeFileSync(join(dir, 'package.json'), '{"name":"fixture"}');
+    assert.equal(knip.skip({ targetDir: dir }), null);
   });
 
   it('builds correct command with cwd', () => {

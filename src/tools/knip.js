@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { skipUnlessFileExists } from '../adapter-helpers.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -122,6 +123,11 @@ export default {
   extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'],
   supportsFix: true,
   installHint: 'npm install -g knip',
+
+  // knip needs an npm project root. On Go/Python-only repos its bootstrap
+  // would fail with a misleading "bootstrap-failure" finding; the hook skips
+  // the run instead and the note travels into the report's [WARN] section.
+  skip: skipUnlessFileExists('package.json', 'knip: not a JS project (no package.json in target) — skipped'),
 
   buildCommand(targetDir, _configPath, { fix = false } = {}) {
     const args = ['--reporter', 'json', '--no-progress'];

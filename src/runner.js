@@ -144,7 +144,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
 
       const result = await spawnAndCollect(bin, args, { cwd, timeout });
 
-      resolve(classifySpawnResult(tool, bin, result, timeout, duration(), fixSkipped));
+      resolve(classifySpawnResult(tool, bin, result, timeout, duration(), fixSkipped, { targetDir }));
     } catch (err) {
       resolve({
         tool: tool.name,
@@ -159,7 +159,7 @@ function runSingleTool(tool, configPath, targetDir, timeout, { files = [], fix =
 }
 
 /** Classifies a completed spawn outcome (timeout / spawn failure / parse) into a tool result. */
-function classifySpawnResult(tool, bin, result, timeout, duration, fixSkipped) {
+function classifySpawnResult(tool, bin, result, timeout, duration, fixSkipped, { targetDir } = {}) {
   if (result.killed) {
     return {
       tool: tool.name,
@@ -188,7 +188,7 @@ function classifySpawnResult(tool, bin, result, timeout, duration, fixSkipped) {
     // silent graceful degradation (eslint's shipped config) can instead
     // return `{ findings, warnings }` — the warnings carry the "what is
     // disabled and why" notice lines into the report's [WARN] section.
-    const parsed = tool.parseOutput(result.stdout, result.stderr, result.exitCode);
+    const parsed = tool.parseOutput(result.stdout, result.stderr, result.exitCode, { targetDir });
     const isArray = Array.isArray(parsed);
     return {
       tool: tool.name,

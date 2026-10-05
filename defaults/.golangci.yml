@@ -1,10 +1,17 @@
+# fast-cv shipped default for golangci-lint — targets the v2 schema
+# (`version: "2"`, nested `linters.settings`), verified against golangci-lint
+# 2.x releases. golangci-lint v1 rejects this schema: if you still run v1,
+# provide your own local .golangci.yml (local configs win over shipped
+# defaults in the config resolution order).
+version: "2"
 linters:
+  default: none
   enable:
     - gocognit
     - gocritic
     - revive
-linters-settings:
-  revive:
-    rules:
-      - name: exported
-        severity: warning
+  settings:
+    revive:
+      rules:
+        - name: exported
+          severity: warning
